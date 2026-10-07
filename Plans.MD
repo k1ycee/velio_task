@@ -86,7 +86,7 @@ velio_project/
 - [ ] `users(phone UNIQUE, email UNIQUE)`; `settings(key PK, value)` seeded with `new_user_cap = 2`
 - [ ] **Done when:** `docker compose up -d && npm run migrate` succeeds, and inserting `spots_left = -1` fails.
 
-#### Task 2: Users + activities (1.5h)
+#### Task 2: Users + activities (1.5h) ✅
 **Files:** `src/users/*`, `src/activities/*`, `src/track/track.service.ts`, `test/bookings.e2e-spec.ts`
 **Produces:** `POST /users {phone,email} → {id}` (returns the existing user if either field matches); `POST /activities {title, startsAt, capacity}`; `GET /activities/:id/availability → {spotsLeft, version}`; `track(c, name, props)`.
 - [ ] Identity: an `X-User-Id` header acts as the role toggle; there's no auth

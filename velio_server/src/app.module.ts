@@ -8,12 +8,14 @@ import { BookingsController } from './bookings/bookings.controller.js';
 import { BookingsService } from './bookings/bookings.service.js';
 import { InvitesController } from './invites/invites.controller.js';
 import { InvitesService } from './invites/invites.service.js';
+import { ExpiryService } from './expiry/expiry.service.js';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PgErrorFilter } from './common/http.js';
 import { APP_FILTER } from '@nestjs/core';
 
 @Module({
-  imports: [DbModule],
+  imports: [DbModule, ScheduleModule.forRoot()],
   controllers: [AppController, UsersController, ActivitiesController, BookingsController, InvitesController],
-  providers: [AppService, BookingsService, InvitesService, { provide: APP_FILTER, useClass: PgErrorFilter }],
+  providers: [AppService, BookingsService, InvitesService, ExpiryService, { provide: APP_FILTER, useClass: PgErrorFilter }],
 })
 export class AppModule {}

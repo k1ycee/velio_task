@@ -110,7 +110,7 @@ velio_project/
 - [ ] Public claim: untied held spot → open spot. Released vouch: open spot, keeping `invite_type = 'vouch'`.
 - [ ] **Done when:** all three claim paths and the "vouch already used" case are tested; each emits `spot_claimed` with `invite_type, invite_id, inviter_id, is_new_user`.
 
-#### Task 6: Expiry job + concurrency proof (2h)
+#### Task 6: Expiry job + concurrency proof (2h) ✅
 **Files:** `src/expiry/expiry.service.ts`, `test/expiry.e2e-spec.ts`, `test/concurrency.e2e-spec.ts`
 **Produces:** `releaseExpiredHolds(now: Date)`, run every 60s via `@Interval(60_000)`.
 - [ ] Releases held spots past `hold_expires_at` back to `spots_left`, and emits `hold_released`

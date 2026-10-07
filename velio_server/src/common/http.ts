@@ -2,6 +2,7 @@ import {
   ArgumentsHost,
   BadRequestException,
   Catch,
+  ConflictException,
   ExecutionContext,
   UnauthorizedException,
   createParamDecorator,
@@ -33,12 +34,17 @@ export function requireId(value: string): string {
   return value;
 }
 
-/** Turns an unknown X-User-Id (foreign key violation) into a 400 instead of a 500. */
+/** Maps Postgres constraint errors to 4xx instead of 500. */
 @Catch()
 export class PgErrorFilter extends BaseExceptionFilter {
   catch(err: unknown, host: ArgumentsHost) {
-    if ((err as { code?: string })?.code === '23503') {
+    const code = (err as { code?: string })?.code;
+    if (code === '23503') {
       return super.catch(new BadRequestException('referenced user or record does not exist'), host);
+    }
+    if (code === '23505') {
+      // e.g. one_spot_per_user_per_activity: this person already holds a spot here.
+      return super.catch(new ConflictException({ reason: 'duplicate', message: 'already exists' }), host);
     }
     return super.catch(err, host);
   }

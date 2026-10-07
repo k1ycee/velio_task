@@ -97,7 +97,7 @@ velio_project/
 **Produces:** `holdWindowHours(activityAt: Date, bookedAt: Date): number`
 - [ ] **Done when:** these tests pass — 6h out → `2`; 24h out → `8`; 71h out → `23.67`; 300h out → `72`.
 
-#### Task 4: Bookings (2.5h)
+#### Task 4: Bookings (2.5h) ✅
 **Files:** `src/bookings/*`, `test/bookings.e2e-spec.ts`
 **Consumes:** `tx`, `holdWindowHours`, `track` · **Produces:** `POST /bookings {activityId, heldSpots} → 201 {planId, holdExpiresAt} | 409 {available} | 422 {cap}`
 - [ ] `UPDATE activities SET spots_left = spots_left - $n, version = version + 1 WHERE id = $1 AND spots_left >= $n RETURNING *`

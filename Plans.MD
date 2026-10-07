@@ -103,7 +103,7 @@ velio_project/
 - [ ] `UPDATE activities SET spots_left = spots_left - $n, version = version + 1 WHERE id = $1 AND spots_left >= $n RETURNING *`
 - [ ] **Done when:** `heldSpots > cap` → 422; with 3 left and 4 requested → `409 {available: 3}`; on success it emits `booking_created`.
 
-#### Task 5: Invites + claims (4h)
+#### Task 5: Invites + claims (4h) ✅
 **Files:** `src/invites/*`, `test/invites.e2e-spec.ts`
 **Produces:** `POST /plans/:id/invites {type}` → `{token, url}`; `POST /invites/:token/claim` → `201 {spotId} | 409 {reason: 'race_lost'|'sold_out'|'used'}`
 - [ ] A vouch invite ties one untied held spot using `FOR UPDATE SKIP LOCKED`. If none are left → 409.

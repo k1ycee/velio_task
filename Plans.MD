@@ -127,14 +127,14 @@ velio_project/
 
 ### M3 — React web: host + booker (9h)
 
-#### Task 8: Shell + live hook (1.5h)
+#### Task 8: Shell + live hook (1.5h) ✅
 **Files:** `velio_web/src/App.tsx`, `api.ts`, `useAvailability.ts`
 **Produces:** `useAvailability(activityId) → {spotsLeft, version}`: takes a snapshot, then reads from an `EventSource`, drops stale versions, and reports latency.
 - [ ] **Done when:** the count updates in two tabs without a refresh.
 
-#### Task 9: Host page (2h) — create an activity; list activities with live spots left.
-#### Task 10: Booker page (2.5h) — book with a held-spot count; handle the `409 {available}` "book N?" prompt and the `422` cap error.
-#### Task 11: Plan page (3h) — hold countdown, member list, create labelled vouch URLs and the public URL, copy to clipboard.
+#### Task 9: Host page (2h) ✅ — create an activity; list activities with live spots left.
+#### Task 10: Booker page (2.5h) ✅ — book with a held-spot count; handle the `409 {available}` "book N?" prompt and the `422` cap error.
+#### Task 11: Plan page (3h) ✅ — hold countdown, member list, create labelled vouch URLs and the public URL, copy to clipboard.
 - [ ] **Done when:** the countdown matches the server's `holdExpiresAt`, and every created URL can be claimed.
 
 ### M4 — Flutter: guest claim (6h)

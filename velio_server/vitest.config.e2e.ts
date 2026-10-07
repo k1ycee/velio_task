@@ -9,6 +9,8 @@ export default defineConfig({
     root: './',
     include: ['**/*.e2e-spec.ts'],
     globalSetup: ['./test/global-setup.ts'],
+    // One file at a time: tests share one database, and the dashboard test checks exact totals.
+    fileParallelism: false,
     env: { DATABASE_URL: TEST_DATABASE_URL },
   },
 });

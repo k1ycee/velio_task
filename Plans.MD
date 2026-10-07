@@ -151,7 +151,7 @@ velio_project/
 
 ### M5 — Tracking dashboard (4h)
 
-#### Task 14: Dashboard + settings (4h)
+#### Task 14: Dashboard + settings (4h) ✅
 **Files:** `src/dashboard/*`
 **Produces:** `GET /dashboard` (an HTML page with SQL-calculated metrics); `POST /settings {new_user_cap}`
 - [ ] Metrics: oversell count, booking success %, p95 latency, invite rate, claim rate (vouch / public), K-factor (vouch / public), plans that happened
@@ -205,3 +205,27 @@ Device deep-link setup, integration fixes, and the end-to-end demo: host creates
 3. **40h across three codebases — MEDIUM.** Mitigated by the cut order above.
 4. **Assumed:** the new-user cap of 2 excludes the booker's own seat. **Confirm.**
 5. **Short hold windows:** a booking made 30 minutes before the activity gets a 10-minute window, so warnings land too late to help.
+
+---
+
+## Running locally
+
+```bash
+docker compose up -d                                  # Postgres 16 + Redis 7
+cd velio_server && npm install && npm run migrate && npm run start:dev   # API on :3000
+cd velio_web && npm install && npm run dev            # host + booker app on :5173
+cd velio_flutter && flutter run                       # guest app (simulator: localhost works)
+#   physical device: flutter run --dart-define=API_URL=http://<your-lan-ip>:3000
+#   Android emulator: flutter run --dart-define=API_URL=http://10.0.2.2:3000
+```
+
+- **Dashboard:** http://localhost:3000/dashboard (metrics + the new-user cap). JSON at `/dashboard/metrics`.
+- **Open an invite on a device:** `xcrun simctl openurl booted "velio://invite/<token>"` (iOS) or `adb shell am start -d "velio://invite/<token>"` (Android), or paste the link/code on the app's home screen.
+
+**Tests**
+
+| Where | Command | Notes |
+| --- | --- | --- |
+| `velio_server` | `npm test` / `npm run test:e2e` | e2e needs Docker up; uses a throwaway `velio_test` DB |
+| `velio_web` | `npm test` | pure logic (version merge, countdown) |
+| `velio_flutter` | `flutter test` | `live_backend_test.dart` runs against a local server, skips itself if none |

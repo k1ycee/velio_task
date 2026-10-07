@@ -6,7 +6,7 @@
 
 **Architecture:** One TypeScript server is the only writer to Postgres. Every change to spot counts runs in a single transaction. After it commits, the server publishes to Redis, and Server-Sent Events push the update to clients. React serves hosts and bookers; Flutter serves invited guests. Events are written to Postgres and read by a dashboard page that the server renders.
 
-**Tech Stack:** Node 24 + TypeScript, NestJS 11 (`@nestjs/schedule` for the expiry interval, `@Sse` for streams), `pg`, `ioredis`, Vitest · Postgres 16 + Redis 7 via Docker Compose · React + Vite · Flutter (`app_links`, `http`).
+**Tech Stack:** Node 24 + TypeScript, NestJS 12, ESM (`@nestjs/schedule` for the expiry interval, `@Sse` for streams), `pg`, `ioredis`, Vitest · Postgres 16 + Redis 7 via Docker Compose · React + Vite · Flutter (`app_links`, `http`).
 
 **Spec:** `grill-me-sessions/velioapp.grill.md` (decisions) · `Questions.MD` (27-question Q&A log).
 
@@ -76,9 +76,9 @@ velio_project/
 
 ### M1 — Backend core (14h)
 
-#### Task 1: Infra + schema (3.5h)
+#### Task 1: Infra + schema (3.5h) ✅
 **Files:** create `docker-compose.yml`, `velio_server/migrations/001_init.sql`, `src/db/db.service.ts`, `src/app.module.ts`
-**Status:** ✅ `velio_server` (NestJS) and `velio_web` (Vite React TS) scaffolded, `docker-compose.yml` added — both build.
+**Status:** ✅ Done — scaffolds, `docker-compose.yml`, `migrations/001_init.sql`, `npm run migrate`, `DbService.tx()`; `test/schema.e2e-spec.ts` (6 passing) runs against a throwaway `velio_test` DB.
 **Produces:** `tx<T>(fn: (c: PoolClient) => Promise<T>): Promise<T>`; tables `users, activities, plans, spots, invites, settings, events`.
 - [ ] `activities.spots_left INT CHECK (spots_left >= 0)`, `version BIGINT`
 - [ ] `spots(status: 'booker'|'held'|'claimed'|'released', invite_id NULL, hold_expires_at)`

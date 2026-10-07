@@ -92,7 +92,7 @@ velio_project/
 - [ ] Identity: an `X-User-Id` header acts as the role toggle; there's no auth
 - [ ] **Done when:** a second `POST /users` with the same phone and a new email returns the same `id`.
 
-#### Task 3: Hold window (0.5h)
+#### Task 3: Hold window (0.5h) ✅
 **Files:** `src/hold-window.ts`, `test/hold-window.spec.ts`
 **Produces:** `holdWindowHours(activityAt: Date, bookedAt: Date): number`
 - [ ] **Done when:** these tests pass — 6h out → `2`; 24h out → `8`; 71h out → `23.67`; 300h out → `72`.

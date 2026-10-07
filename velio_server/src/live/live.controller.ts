@@ -25,6 +25,16 @@ export class LiveController {
   ) {}
 
   /**
+   * Every committed change for every activity, on one connection — list pages use this so they
+   * don't hit the browser's 6-connections-per-host limit on HTTP/1.1. No snapshot: clients open
+   * this first, then load GET /activities (which carries versions) and keep the higher version.
+   */
+  @Sse('activities/stream')
+  streamAll(): Observable<MessageEvent> {
+    return merge(this.live.allUpdates().pipe(map((data): MessageEvent => ({ data }))), this.pings());
+  }
+
+  /**
    * Snapshot plus every committed change. Listens for updates *before* reading the snapshot, so a
    * commit can't slip into the gap between them; clients drop anything with version <= theirs.
    */
@@ -41,9 +51,12 @@ export class LiveController {
       );
       return sub;
     }).pipe(map((data): MessageEvent => ({ data })));
-    // Keeps idle connections open through proxies and mobile networks.
-    const ping$ = interval(25_000).pipe(map((): MessageEvent => ({ type: 'ping', data: '{}' })));
-    return merge(data$, ping$);
+    return merge(data$, this.pings());
+  }
+
+  /** Keeps idle connections open through proxies and mobile networks. */
+  private pings(): Observable<MessageEvent> {
+    return interval(25_000).pipe(map((): MessageEvent => ({ type: 'ping', data: '{}' })));
   }
 
   private async snapshot(id: string): Promise<Availability> {

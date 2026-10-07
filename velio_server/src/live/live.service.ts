@@ -47,6 +47,10 @@ export class LiveService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  allUpdates(): Observable<Availability> {
+    return this.updates.asObservable();
+  }
+
   updatesFor(activityId: string): Observable<Availability> {
     return this.updates.pipe(filter((u) => u.activityId === activityId));
   }

@@ -11,8 +11,8 @@ interface Availability {
 }
 
 /** Minimal SSE reader over fetch: collects `data:` messages, skips named events (pings). */
-async function openStream(baseUrl: string, activityId: string) {
-  const res = await fetch(`${baseUrl}/activities/${activityId}/stream`);
+async function openStream(baseUrl: string, activityId: string | null) {
+  const res = await fetch(`${baseUrl}/activities/${activityId === null ? '' : `${activityId}/`}stream`);
   expect(res.headers.get('content-type')).toContain('text/event-stream');
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
@@ -144,6 +144,31 @@ describe('GET /activities/:id/stream', () => {
       ]);
       await a.app.get(ExpiryService).releaseExpiredHolds();
       expect(await stream.next()).toMatchObject({ spotsLeft: 6 });
+    } finally {
+      await stream.close();
+    }
+  });
+
+  it('GET /activities/stream carries updates for every activity on one connection', async () => {
+    const first = await newActivity(4);
+    const second = await newActivity(6);
+    const stream = await openStream(urlB, null);
+    try {
+      await book(first);
+      await book(second, 1);
+      // Other test files publish on the same Redis, so skip their activities.
+      const got: Availability[] = [];
+      const deadline = Date.now() + 2000;
+      while (got.length < 2) {
+        const msg = await stream.next(Math.max(1, deadline - Date.now()));
+        if (msg.activityId === first || msg.activityId === second) got.push(msg);
+      }
+      expect(got).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ activityId: first, spotsLeft: 3 }),
+          expect.objectContaining({ activityId: second, spotsLeft: 4 }),
+        ]),
+      );
     } finally {
       await stream.close();
     }

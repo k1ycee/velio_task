@@ -1,231 +1,337 @@
-# Velio Group Bookings — Implementation Plan
+# Velio Group Bookings — Implementation Plan (as built)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to carry out this plan one task at a time. Before starting a milestone, expand it into step-level TDD tasks in `docs/superpowers/plans/`. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` for any follow-up work in [Next steps](#11-next-steps). Expand a next step into step-level TDD tasks in `docs/superpowers/plans/` before starting it. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Group bookings with held spots, vouch and public invites, zero oversell, live availability, and in-house metrics, in 40 hours.
+**Goal:** Group bookings with held spots, vouch and public invites, zero oversell, live availability, and in-house metrics, in a 40-hour budget.
 
-**Architecture:** One TypeScript server is the only writer to Postgres. Every change to spot counts runs in a single transaction. After it commits, the server publishes to Redis, and Server-Sent Events push the update to clients. React serves hosts and bookers; Flutter serves invited guests. Events are written to Postgres and read by a dashboard page that the server renders.
+**Architecture:** One NestJS server is the only writer to Postgres, and every change to a spot count runs in a single transaction. After the commit, the server publishes the new count to Redis. Every server instance relays it to its clients over Server-Sent Events. React serves hosts and bookers; Flutter serves invited guests. Events are written to Postgres in the same transaction as the change they describe, and a dashboard page rendered by the server reads them.
 
-**Tech Stack:** Node 24 + TypeScript, NestJS 12, ESM (`@nestjs/schedule` for the expiry interval, `@Sse` for streams), `pg`, `ioredis`, Vitest · Postgres 16 + Redis 7 via Docker Compose · React + Vite · Flutter (`app_links`, `http`).
+**Tech Stack:**
+- **Server:** Node 24, NestJS 12 (ESM), `pg`, `ioredis`, `@nestjs/schedule`, Vitest + Supertest.
+- **Infrastructure:** Postgres 16 and Redis 7 via Docker Compose.
+- **Web:** React 19 + Vite 8, Vitest.
+- **Mobile:** Flutter 3.44 with `hooks_riverpod`, `flutter_hooks`, `dio`, `fpdart`, `app_links`, `shared_preferences`.
 
-**Spec:** `grill-me-sessions/velioapp.grill.md` (decisions) · `Questions.MD` (27-question Q&A log).
+**Spec:** `grill-me-sessions/velioapp.grill.md` (decisions and risks) · `Questions.MD` (27-question Q&A log, kept locally and excluded from git).
+
+**Status (2026-10-07): all 14 tasks done** across 13 commits on `main`. Every suite is green:
+- server: 10 unit tests + 60 database (e2e) tests
+- web: 9 tests
+- Flutter: 18 tests
+
+Builds and linters are clean. See [Verification](#9-verification) for what has and hasn't been checked by eye.
+
+---
 
 ## Global Constraints
 
-- Postgres is the **only** source of truth for spot counts. Redis never decides whether a claim succeeds.
-- Every change to spot counts (book, tie a spot to a vouch, claim, released-vouch fallback, expiry release) runs in **one Postgres transaction**. Whoever loses a race gets `409 race_lost`.
-- Publish to Redis **only after commit**, with payload `{activityId, spotsLeft, version, committedAt}`. Clients drop any message with `version ≤ current`.
-- Hold window = `min(72, (activityTime − bookingTime) / 3)` **hours**, in decimal hours, ignoring seconds.
-- Held spots per booking ≤ `settings.new_user_cap` (default `2`, **not** counting the booker's own spot). It's read from Postgres on every booking.
-- Vouch URL: **one per invitee, single-use, tied to one held spot.** Public URL: **one per booking, reusable.**
-- Public claim order: **untied held spot → open spot.** Released-vouch claim: **open spot, keeping the vouch attribution → otherwise "sold out".**
-- Everyone who claims joins the booker's Plan.
-- Identity: phone + email, **unique per field**, unverified. Email is lowercased, and `+` aliases are rejected.
-- Live updates use **SSE**, not WebSockets. Serve over HTTP/2 in any deployed environment.
-- Every event carries `user_id`, `activity_id`, `plan_id` (where relevant), and `created_at` set by the server.
+Every task follows these rules. The code enforces each one, and a test checks it.
+
+1. **Postgres is the only source of truth for spot counts.** Redis only broadcasts; it never decides whether a claim succeeds.
+2. **One transaction per spot change.** This covers: booking (the booker's spot plus held spots), tying a spot to a vouch link, claiming, the released-vouch fallback, and releasing expired holds. Whoever loses a race gets `409 {reason: 'race_lost'}`.
+3. **The oversell guard lives in the database:** `CHECK (spots_left >= 0 AND spots_left <= capacity)` plus a conditional decrement (`… WHERE spots_left >= $n`).
+4. **Publish only after commit**, with payload `{activityId, spotsLeft, version, committedAt}`. Clients drop any message whose `version` is ≤ the one they have.
+5. **Hold window** = `min(72h, (activityTime − bookingTime) / 3)`, in whole minutes (seconds ignored). Unfilled held spots go back to the open pool when it ends.
+6. **Cap:** held spots per booking ≤ `settings.new_user_cap`, which defaults to `2` and does **not** count the booker's own spot. It's read from Postgres on every booking.
+7. **Vouch link:** one per invitee, single-use, tied to one held spot. **Public link:** one per plan, reusable.
+8. **Where a claimed spot comes from.** Public claim: an untied held spot, then an open spot. Vouch whose spot was released: an open spot, still credited as a vouch, otherwise `race_lost`. Everyone who claims joins the booker's plan.
+9. **One spot per person per activity**, enforced by a unique index. A second claim gets `409 {reason: 'duplicate'}`.
+10. **Identity:** name, phone and email. Phone and email are **each unique on their own**, and neither is verified. Emails are lowercased, and `+` aliases are rejected. The `X-User-Id` header acts as the role toggle; there is no auth.
+11. **Live updates use SSE**, not WebSockets. Serve over HTTP/2 in any deployed environment.
+12. **Every event carries** `user_id`, `activity_id`, `plan_id` (where relevant), and a server `created_at`. Invite and claim events also carry `inviteType`, `inviteId`, `inviterId` and `isNewUser`.
 
 ---
 
-## Targets → evidence
+## 1. Targets → evidence
 
-| Goal | Target | Proven by |
-| --- | --- | --- |
-| Never oversell | 0 oversold | `CHECK (spots_left >= 0)` + the concurrency test (Task 6) + the dashboard counter |
-| Booking success | 99.5% | `booking_failed.reason`: `race_lost` is excluded; `error`/`timeout` count as failures |
-| Live availability | p95 ≤ 2s | p95 of `availability_received.latency_ms` |
-| Bookers invite | 30% | bookers with ≥1 `invite_created` ÷ bookers |
-| Invites convert | 25% | `spot_claimed` ÷ unique `invite_opened`, split by vouch and public |
+| Goal | Target | How it's measured | Proven by |
+| --- | --- | --- | --- |
+| Never oversell | 0 oversold | Activities whose non-released spots exceed capacity, plus a **count-drift** check (`capacity − spots_left` must equal the number of non-released spots) | DB constraint · `concurrency.e2e-spec.ts` · dashboard tile |
+| Booking success | ≥ 99.5% | (`booking_created` + `spot_claimed`) ÷ (those + `booking_failed` with reason `error` or `timeout`); `race_lost` is excluded | `dashboard.e2e-spec.ts` |
+| Live availability | p95 ≤ 2s | p95 of `availability_received.props.latencyMs`, corrected for client clock drift | `live.e2e-spec.ts`, Flutter `live_backend_test.dart`, headless-Chrome run (75 ms) |
+| Bookers invite | ≥ 30% | bookers with ≥1 `invite_created` ÷ bookers | `dashboard.e2e-spec.ts` |
+| Invites convert | ≥ 25% | `spot_claimed` ÷ unique `invite_opened` (per person per link), **split by vouch and public** | `dashboard.e2e-spec.ts` |
+| K-factor | tracked | new users whose first action was claiming through an invite ÷ bookers, split by vouch and public | `dashboard.e2e-spec.ts` |
+| Plans that happen | tracked | past plans with the booker plus ≥1 claimed guest | `dashboard.e2e-spec.ts` |
+
+All of these are on `GET /dashboard` (HTML) and `GET /dashboard/metrics` (JSON).
 
 ---
 
-## File Structure
+## 2. Changes from the original plan
+
+| Area | Originally planned | As built | Why |
+| --- | --- | --- | --- |
+| Server framework | Fastify | **NestJS 12, ESM** (imports use `.js` suffixes) | Your choice when the build started |
+| Tracking helper | `track/track.service.ts` | Plain `track(client, name, ids, props)` in `track/track.ts` | A function is enough; taking the transaction client keeps events atomic with the change they record |
+| Users / activities | Controller + service each | Controllers only | Thin CRUD; no logic for a service layer to hold |
+| `POST /users` body | `{phone, email}` | `{name, phone, email}` | The guest form and plan member list need a name |
+| Schema | `hold_expires_at` on each spot | `plans.hold_expires_at` + `plans.warned_pct`; `spots.activity_id`; unique index `one_spot_per_user_per_activity` | The hold belongs to the plan; the index blocks duplicate claims (vouch + public) at the database |
+| Hold window | decimal hours | Whole minutes, then hours | "Seconds don't matter" becomes exact, with no float drift |
+| Claim failure reasons | `race_lost` · `sold_out` · `used` | `race_lost` · `used` · `duplicate`; invite creation adds `no_held_spot` | One "no spot at commit" reason for bookings and claims keeps the 99.5% calculation simple |
+| Expired but unreleased hold | not specified | Still claimable until the expiry job runs | Same count as release + reclaim, done in one step (code comment in `invites.service.ts`) |
+| `invite_opened` | Sent by Flutter through `POST /events` | Recorded by the server on **`GET /invites/:token`** (new endpoint) using the optional `X-User-Id` | More reliable; the guest app already loads the invite from there |
+| `POST /events` | Any client event | Only `availability_received`; the server computes `latencyMs` with clock-drift correction | Clients can't forge business events; phone clocks drift |
+| Live streams | `GET /activities/:id/stream` | **+ `GET /activities/stream`** (all activities, one connection) | Browsers allow only 6 connections per host on HTTP/1.1, so a list page can't open one per activity |
+| Stream ordering | Snapshot, then updates | Subscribe to updates **before** reading the snapshot | Otherwise a commit landing in between would be missed |
+| Read endpoints | — | **+ `GET /activities`, `GET /plans`, `GET /plans/:id`, `GET /users`** | Needed by the React list, plan and identity-picker pages |
+| Web live hook | `useAvailability(activityId)` | `useLiveCounts(userId)` → `{counts, seed, resyncKey}`; pages reload when `resyncKey` changes (reconnect or tab focus) | One connection per page; reloading on resync covers sleep and dropped connections |
+| Web routing / identity | — | Hash routing (3 routes); identity picker + "New user" stored in `localStorage` | No router library needed; simple role toggle per the brief |
+| Plan membership | live | Polled every 5s | Only spot counts are pushed live; membership changes rarely |
+| Flutter structure | `api.dart`, `availability_stream.dart`, `claim_screen.dart` | Preferred mobile architecture: views → `ClaimVM` → `InviteRepository` → `InviteClient` (Dio) + services | Your `preferred-mobile-architecture` skill |
+| Flutter HTTP | `http` | `dio` (Dio delivers `Uint8List` streams, so the SSE parser `cast`s the bytes) | Required by the architecture; regression test in `sse_test.dart` |
+| Flutter extras | — | Home screen for pasting a link or code; `StorageService` remembers the user ID; SSE reconnect after 2s | The scope says guests arrive "through a link **or code**"; returning guests skip identity entry |
+| Dashboard | HTML + `POST /settings` | + `GET /dashboard/metrics` (JSON) and the count-drift check; database test files run **one at a time** | JSON for scripting; drift catches count bugs the oversell check can't; serial runs allow exact metric assertions |
+
+---
+
+## 3. API reference
+
+All endpoints are in `velio_server/src`. `🔑` means the endpoint requires an `X-User-Id` header.
+
+| Method & path | 🔑 | Returns | Errors |
+| --- | --- | --- | --- |
+| `POST /users {name, phone, email}` | | `201 {id}` new · `200 {id}` existing (phone or email matched) | 400 invalid / `+` alias |
+| `GET /users` | | `[{id, name}]` (no contact details) | |
+| `POST /activities {title, startsAt, capacity}` | 🔑 | `201 Activity` | 400 past date / capacity < 1 · 400 unknown user |
+| `GET /activities` | | upcoming `Activity[]` | |
+| `GET /activities/:id/availability` | | `{spotsLeft, version}` | 404 |
+| `POST /bookings {activityId, heldSpots}` | 🔑 | `201 {planId, holdExpiresAt, spotsLeft, version}` | 422 `{cap}` · 409 `{reason:'race_lost', available}` · 409 `duplicate` · 400 started |
+| `GET /plans` | 🔑 | the caller's plans | |
+| `GET /plans/:id` | 🔑 booker | plan, activity, hold times, `heldSpotsLeft`, members, invites | 403 · 404 |
+| `POST /plans/:id/invites {type, label?}` | 🔑 booker | `201 {inviteId, type, token, label, url}` (public: `200` if it already exists) | 409 `no_held_spot` · 403 |
+| `GET /invites/:token` | optional | invite + activity + inviter name; records `invite_opened` | 404 |
+| `POST /invites/:token/claim` | 🔑 | `201 {spotId, planId, activityId, source:'held'\|'open', spotsLeft, version}` | 409 `race_lost` / `used` / `duplicate` · 400 own invite / started |
+| `GET /activities/:id/stream` | | SSE: snapshot + updates, ping every 25s | 404 |
+| `GET /activities/stream` | | SSE: updates for every activity | |
+| `POST /events {name:'availability_received', activityId, props}` | optional | `{ok:true}` | 400 other event names |
+| `GET /dashboard` · `GET /dashboard/metrics` | | HTML · `Metrics` JSON | |
+| `POST /settings` (form: `new_user_cap`) | | `303 → /dashboard` | 400 if not 0–50 |
+
+---
+
+## 4. File structure
 
 ```
 velio_project/
-├── docker-compose.yml                 # postgres:16, redis:7
-├── velio_server/                      # NestJS API + SSE + expiry job + dashboard
-│   ├── migrations/001_init.sql        # all tables, constraints, settings seed
+├── docker-compose.yml                     postgres:16 + redis:7
+├── velio_server/                          NestJS 12 (ESM)
+│   ├── migrations/001_init.sql            all tables, constraints, indexes, settings seed
 │   ├── src/
-│   │   ├── main.ts                    # bootstrap, CORS for velio_web
-│   │   ├── app.module.ts              # imports feature modules, ScheduleModule
-│   │   ├── db/db.service.ts           # pg Pool + tx(fn) helper (global module)
-│   │   ├── track/track.service.ts     # track(client, event, props) — writes events row
-│   │   ├── live/                      # live.service.ts publishAvailability(); live.controller.ts @Sse stream
-│   │   ├── hold-window.ts             # holdWindowHours(activityAt, bookedAt) — pure function
-│   │   ├── users/                     # users.controller.ts POST /users, users.service.ts
-│   │   ├── activities/                # POST /activities, GET /activities/:id/availability
-│   │   ├── bookings/                  # POST /bookings
-│   │   ├── invites/                   # POST /plans/:id/invites, POST /invites/:token/claim
-│   │   ├── expiry/expiry.service.ts   # @Interval(60_000) releaseExpiredHolds(), warnings
-│   │   └── dashboard/                 # GET /dashboard (HTML), POST /settings
-│   └── test/                          # vitest, runs against docker Postgres
-│       ├── hold-window.spec.ts
-│       ├── bookings.e2e-spec.ts
-│       ├── invites.e2e-spec.ts
-│       ├── expiry.e2e-spec.ts
-│       └── concurrency.e2e-spec.ts
-├── velio_web/                         # React (Vite): host + booker
-│   └── src/{App.tsx, api.ts, useAvailability.ts, HostPage.tsx, BookerPage.tsx, PlanPage.tsx}
-└── velio_flutter/                     # existing scaffold: guest claim
-    └── lib/{main.dart, api.dart, availability_stream.dart, claim_screen.dart}
+│   │   ├── main.ts                        bootstrap + CORS
+│   │   ├── app.module.ts                  wires every controller/service, ScheduleModule, PgErrorFilter
+│   │   ├── db/{db.module,db.service,migrate}.ts   pool, tx(fn), migration runner (npm run migrate)
+│   │   ├── common/http.ts                 @UserId(), requireString/Int/Id, PgErrorFilter (23503→400, 23505→409)
+│   │   ├── track/track.ts                 track(client, name, ids, props)
+│   │   ├── settings.ts                    readSetting<T>(client, key)
+│   │   ├── hold-window.ts                 holdWindowHours(), holdExpiresAt()
+│   │   ├── users/users.controller.ts
+│   │   ├── activities/activities.controller.ts     + toActivity() mapper
+│   │   ├── bookings/{bookings.controller,bookings.service}.ts
+│   │   ├── plans/plans.controller.ts
+│   │   ├── invites/{invites.controller,invites.service}.ts
+│   │   ├── expiry/expiry.service.ts       @Interval(60s): releaseExpiredHolds(), sendHoldWarnings()
+│   │   ├── live/{live.service,live.controller}.ts  Redis pub/sub, SSE streams, POST /events
+│   │   └── dashboard/{metrics,dashboard.controller}.ts
+│   └── test/                              *.spec.ts = unit · *.e2e-spec.ts = against velio_test DB
+├── velio_web/src/                         React 19 + Vite
+│   ├── App.tsx                            hash routes: #/host · #/book · #/plan/:id
+│   ├── api.ts                             api<T>(), ApiError, shared types
+│   ├── live.ts                            applyUpdate(), currentSpotsLeft(), useLiveCounts()
+│   ├── time.ts                            formatCountdown(), holdProgress(), formatWhen(), useNow()
+│   ├── Identity.tsx · useIdentity.ts      identity picker / localStorage
+│   ├── HostPage.tsx · BookerPage.tsx · PlanPage.tsx · SpotsLeft.tsx
+│   └── logic.test.ts
+└── velio_flutter/lib/                     preferred mobile architecture
+    ├── main.dart                          ProviderScope, theme, deep-link listener
+    ├── core/api/{urls.dart, models/invite_models.dart, clients/invite_client.dart}
+    ├── core/repositories/{invite_repo,request_failure}.dart   Either<RequestFailure, T>
+    ├── core/view_models/claim_vm.dart     ClaimVM (ChangeNotifier)
+    ├── core/services/{navigation_service,storage_service}.dart
+    ├── core/providers.dart                inviteRepo, storageService, navigationService, claimVM
+    ├── utils/{sse,invite_token}.dart      sseData(), inviteToken()
+    └── views/{home/home_screen.dart, claim/claim_screen.dart, claim/widget/*}
 ```
 
 ---
 
-## ✅ In the cut — 37h + 3h buffer
+## 5. Tasks (as built)
 
-### M1 — Backend core (14h)
+Each task lists the files it owns, what it gives later tasks, and the test that proves it's done. Estimates are the original budget.
 
-#### Task 1: Infra + schema (3.5h) ✅
-**Files:** create `docker-compose.yml`, `velio_server/migrations/001_init.sql`, `src/db/db.service.ts`, `src/app.module.ts`
-**Status:** ✅ Done — scaffolds, `docker-compose.yml`, `migrations/001_init.sql`, `npm run migrate`, `DbService.tx()`; `test/schema.e2e-spec.ts` (6 passing) runs against a throwaway `velio_test` DB.
-**Produces:** `tx<T>(fn: (c: PoolClient) => Promise<T>): Promise<T>`; tables `users, activities, plans, spots, invites, settings, events`.
-- [ ] `activities.spots_left INT CHECK (spots_left >= 0)`, `version BIGINT`
-- [ ] `spots(status: 'booker'|'held'|'claimed'|'released', invite_id NULL, hold_expires_at)`
-- [ ] `invites(type: 'vouch'|'public', token UNIQUE, plan_id, spot_id NULL, used_at)`; a partial unique index ensures one public invite per plan
-- [ ] `users(phone UNIQUE, email UNIQUE)`; `settings(key PK, value)` seeded with `new_user_cap = 2`
-- [ ] **Done when:** `docker compose up -d && npm run migrate` succeeds, and inserting `spots_left = -1` fails.
+### M1 — Backend core (est. 14h)
 
-#### Task 2: Users + activities (1.5h) ✅
-**Files:** `src/users/*`, `src/activities/*`, `src/track/track.service.ts`, `test/bookings.e2e-spec.ts`
-**Produces:** `POST /users {phone,email} → {id}` (returns the existing user if either field matches); `POST /activities {title, startsAt, capacity}`; `GET /activities/:id/availability → {spotsLeft, version}`; `track(c, name, props)`.
-- [ ] Identity: an `X-User-Id` header acts as the role toggle; there's no auth
-- [ ] **Done when:** a second `POST /users` with the same phone and a new email returns the same `id`.
+#### Task 1: Infra + schema (3.5h)
+**Files:** `docker-compose.yml`, `migrations/001_init.sql`, `src/db/*` · **Test:** `test/schema.e2e-spec.ts`
+**Produces:** `DbService.tx<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T>`; `migrate(url?)`; tables `users, activities, plans, spots, invites, settings, events`.
+- [x] `CHECK (spots_left >= 0 AND spots_left <= capacity)`, `activities.version`
+- [x] `spots.status ∈ booker|held|claimed|released`; `one_spot_per_user_per_activity`; `one_public_invite_per_plan`
+- [x] `users.phone UNIQUE`, `users.email UNIQUE`; `settings.new_user_cap = 2`
+- [x] **Done:** a negative or over-capacity count is rejected; `tx()` rolls back on throw. Tests run against a recreated `velio_test` database.
 
-#### Task 3: Hold window (0.5h) ✅
-**Files:** `src/hold-window.ts`, `test/hold-window.spec.ts`
-**Produces:** `holdWindowHours(activityAt: Date, bookedAt: Date): number`
-- [ ] **Done when:** these tests pass — 6h out → `2`; 24h out → `8`; 71h out → `23.67`; 300h out → `72`.
+#### Task 2: Users, activities, tracking (1.5h)
+**Files:** `src/users/*`, `src/activities/*`, `src/track/track.ts`, `src/common/http.ts` · **Test:** `test/users-activities.e2e-spec.ts`
+**Produces:** `POST /users`, `GET /users`, `POST /activities`, `GET /activities`, `GET /activities/:id/availability`, `toActivity(row)`, `track()`, `@UserId()`, `PgErrorFilter`.
+- [x] **Done:** the same phone with a new email → same `id` (200); `+` aliases → 400; an unknown `X-User-Id` → 400, not 500.
 
-#### Task 4: Bookings (2.5h) ✅
-**Files:** `src/bookings/*`, `test/bookings.e2e-spec.ts`
-**Consumes:** `tx`, `holdWindowHours`, `track` · **Produces:** `POST /bookings {activityId, heldSpots} → 201 {planId, holdExpiresAt} | 409 {available} | 422 {cap}`
-- [ ] `UPDATE activities SET spots_left = spots_left - $n, version = version + 1 WHERE id = $1 AND spots_left >= $n RETURNING *`
-- [ ] **Done when:** `heldSpots > cap` → 422; with 3 left and 4 requested → `409 {available: 3}`; on success it emits `booking_created`.
+#### Task 3: Hold window (0.5h)
+**Files:** `src/hold-window.ts` · **Test:** `test/hold-window.spec.ts`
+**Produces:** `holdWindowHours(activityAt: Date, bookedAt: Date): number`, `holdExpiresAt(activityAt, bookedAt): Date`.
+- [x] **Done:** 6h out → 2 · 24h → 8 · 71h → 23.67 · 216h → 72 · 300h → 72 · 30 min → 0.17 · seconds ignored · already started → 0.
 
-#### Task 5: Invites + claims (4h) ✅
-**Files:** `src/invites/*`, `test/invites.e2e-spec.ts`
-**Produces:** `POST /plans/:id/invites {type}` → `{token, url}`; `POST /invites/:token/claim` → `201 {spotId} | 409 {reason: 'race_lost'|'sold_out'|'used'}`
-- [ ] A vouch invite ties one untied held spot using `FOR UPDATE SKIP LOCKED`. If none are left → 409.
-- [ ] Public claim: untied held spot → open spot. Released vouch: open spot, keeping `invite_type = 'vouch'`.
-- [ ] **Done when:** all three claim paths and the "vouch already used" case are tested; each emits `spot_claimed` with `invite_type, invite_id, inviter_id, is_new_user`.
+#### Task 4: Bookings (2.5h)
+**Files:** `src/bookings/*`, `src/settings.ts` · **Test:** `test/bookings.e2e-spec.ts`
+**Consumes:** `tx`, `holdExpiresAt`, `readSetting`, `track` · **Produces:** `BookingsService.book(bookerId, activityId, heldSpots)`.
+- [x] **Done:** over the cap → 422 `{cap}`; 1 left and 3 requested → 409 `{race_lost, available: 1}` with nothing changed; changing the cap in `settings` takes effect on the next booking; `booking_created` and `booking_failed` events are written.
 
-#### Task 6: Expiry job + concurrency proof (2h) ✅
-**Files:** `src/expiry/expiry.service.ts`, `test/expiry.e2e-spec.ts`, `test/concurrency.e2e-spec.ts`
-**Produces:** `releaseExpiredHolds(now: Date)`, run every 60s via `@Interval(60_000)`.
-- [ ] Releases held spots past `hold_expires_at` back to `spots_left`, and emits `hold_released`
-- [ ] Emits `hold_warning_sent {pct: 50|90}` once per plan at each threshold
-- [ ] **Done when:** 50 parallel claims on 1 remaining spot → exactly 1 success, 49 `race_lost`, and `spots_left = 0`.
+#### Task 5: Invites + claims (4h)
+**Files:** `src/invites/*` · **Test:** `test/invites.e2e-spec.ts`
+**Produces:** `InvitesService.create / open / claim`; `UNBOUND_HELD_SPOT` query (`FOR UPDATE SKIP LOCKED`).
+- [x] **Done:** each vouch link ties its own held spot; one public link per plan; the vouch path; the public path (untied held spot → open spot); released vouch → open spot with vouch credit; released vouch with no spots → `race_lost`; `used`; `duplicate`; can't claim your own invite; `isNewUser` correct.
 
-### M2 — Live availability (4h)
+#### Task 6: Expiry job + concurrency proof (2h)
+**Files:** `src/expiry/expiry.service.ts` · **Tests:** `test/expiry.e2e-spec.ts`, `test/concurrency.e2e-spec.ts`
+**Produces:** `releaseExpiredHolds(now?) → activityIds[]`, `sendHoldWarnings(now?)`, run every 60s; activity rows are locked in ID order so overlapping runs can't deadlock.
+- [x] **Done:** 50 parallel claims on 1 spot → exactly 1 winner and 49 `race_lost`; 50 bookings on 10 spots → exactly 10; release is idempotent and leaves claimed spots alone; warnings fire once at 50% and once at 90%.
 
-#### Task 7: Publish + SSE (4h) ✅
-**Files:** `src/live/*`, modify `bookings.service.ts`, `invites.service.ts`, `expiry.service.ts`
-**Produces:** `publishAvailability(activityId)` (called after commit); `GET /activities/:id/stream` (SSE); `POST /events` for client-side events.
-- [ ] One Redis subscriber per server process, which passes updates on to the SSE connections for that activity
-- [ ] **Done when:** two `curl -N` streams both receive the update after one booking; `availability_received` events are stored.
+### M2 — Live availability (est. 4h)
 
-### M3 — React web: host + booker (9h)
+#### Task 7: Publish + SSE (4h)
+**Files:** `src/live/*`, plus publish calls in `bookings.service.ts`, `invites.service.ts` and `expiry.service.ts` · **Test:** `test/live.e2e-spec.ts`
+**Produces:** `LiveService.publish(activityId, spotsLeft, version)`, `.updatesFor(id)`, `.allUpdates()`; `GET /activities/:id/stream`, `GET /activities/stream`; `POST /events`.
+- [x] **Done:** snapshot, then an update in under 2s; a booking on instance A reaches a client on instance B through Redis; open-spot claims and expiry releases publish; held-spot claims don't (the count didn't change); latency is corrected for a client clock that's a minute fast.
 
-#### Task 8: Shell + live hook (1.5h) ✅
-**Files:** `velio_web/src/App.tsx`, `api.ts`, `useAvailability.ts`
-**Produces:** `useAvailability(activityId) → {spotsLeft, version}`: takes a snapshot, then reads from an `EventSource`, drops stale versions, and reports latency.
-- [ ] **Done when:** the count updates in two tabs without a refresh.
+### M3 — React web: host + booker (est. 9h)
 
-#### Task 9: Host page (2h) ✅ — create an activity; list activities with live spots left.
-#### Task 10: Booker page (2.5h) ✅ — book with a held-spot count; handle the `409 {available}` "book N?" prompt and the `422` cap error.
-#### Task 11: Plan page (3h) ✅ — hold countdown, member list, create labelled vouch URLs and the public URL, copy to clipboard.
-- [ ] **Done when:** the countdown matches the server's `holdExpiresAt`, and every created URL can be claimed.
+#### Task 8: Shell, identity, live counts (1.5h) — *includes added server reads*
+**Files:** `App.tsx`, `api.ts`, `live.ts`, `time.ts`, `Identity.tsx`, `useIdentity.ts`; server `src/plans/plans.controller.ts` · **Tests:** `src/logic.test.ts`, `test/plans.e2e-spec.ts`
+**Produces:** `useLiveCounts(userId) → {counts, seed, resyncKey}`, `applyUpdate(counts, update)`, `currentSpotsLeft(activity, counts)`; `GET /plans`, `GET /plans/:id`.
+- [x] **Done:** stale and duplicate versions are dropped; plan detail is visible only to its booker.
 
-### M4 — Flutter: guest claim (6h)
+#### Task 9: Host page (2h)
+- [x] Create an activity; list your activities with live "N of M left".
 
-#### Task 12: Deep link + claim screen (4h) ✅
-**Files:** `velio_flutter/lib/main.dart`, `api.dart`, `claim_screen.dart`; iOS `Info.plist` and Android `AndroidManifest.xml` URL scheme
-- [ ] `velio://invite/<token>` opens the claim screen and sends `invite_opened`
-- [ ] Form: name, phone, email → claim → success / "sold out" / released-vouch fallback
+#### Task 10: Booker page (2.5h)
+- [x] Book with 0–5 friends; 422 → explains the cap; 409 `race_lost` → "Only N left. Book N?" (never books fewer without asking) or "Just sold out"; 409 duplicate → "already booked"; your plans list.
 
-#### Task 13: Live count in Flutter (2h) ✅
-**Files:** `lib/availability_stream.dart`
-- [ ] Streaming `http` SSE parser; snapshot on `AppLifecycleState.resumed`; reports `availability_received`
-- [ ] **Done when:** the count is correct after the app spends 1 minute in the background while another booking happens.
+#### Task 11: Plan page (3h)
+- [x] Hold countdown with a progress bar; 50%/90% warning banners; members with vouch badges; labelled vouch links and the public link with Copy.
+- [x] **Done (headless Chrome):** a booking showed up in another tab after 75 ms; the countdown read `8h 38m` for an activity 26h away; a vouched guest appeared via polling; the partial-booking prompt works; no horizontal scroll at 375px; no console errors.
 
-### M5 — Tracking dashboard (4h)
+### M4 — Flutter: guest claim (est. 6h)
 
-#### Task 14: Dashboard + settings (4h) ✅
-**Files:** `src/dashboard/*`
-**Produces:** `GET /dashboard` (an HTML page with SQL-calculated metrics); `POST /settings {new_user_cap}`
-- [ ] Metrics: oversell count, booking success %, p95 latency, invite rate, claim rate (vouch / public), K-factor (vouch / public), plans that happened
-- [ ] **Done when:** changing `new_user_cap` on the dashboard changes the next booking's limit with no restart.
+#### Task 12: Deep link + claim screen (4h)
+**Files:** `lib/main.dart`, `core/**`, `views/**`, `utils/invite_token.dart`; iOS `Info.plist` (`CFBundleURLTypes` velio, `NSAllowsLocalNetworking`), Android manifests (`velio://invite` intent filter, `INTERNET`, cleartext in debug only), macOS `network.client` entitlement · **Tests:** `deep_link_test.dart`, `claim_vm_test.dart`, `claim_screen_test.dart`
+**Produces:** `ClaimVM.open(token) / claim(name, phone, email) / resume()`, `ClaimStatus {loading, ready, claiming, claimed, soldOut, error}`.
+- [x] **Done:** "X vouched for you" vs "X invited you"; form validation; claimed, sold-out, used, duplicate and released-vouch-fallback messages; the identity is created once and reused.
 
-### Buffer (3h)
-Device deep-link setup, integration fixes, and the end-to-end demo: host creates → booker books 1 + 2 held → vouches one friend and shares the public URL → two guests claim at the same time → the dashboard reflects every step.
+#### Task 13: Live count in Flutter (2h)
+**Files:** `lib/utils/sse.dart`, `InviteClient.availability()` · **Tests:** `sse_test.dart`, `live_backend_test.dart`
+- [x] SSE parser handles split chunks, pings, CRLF and `Uint8List` input; the view model keeps only newer versions, reconnects after 2s, resyncs when the app resumes, and reports latency.
+- [x] **Done:** against the real server, another booking reached the guest's screen in under 2s, and the claim succeeded from the held spot.
+
+### M5 — Tracking dashboard (est. 4h)
+
+#### Task 14: Dashboard + settings (4h)
+**Files:** `src/dashboard/*` · **Test:** `test/dashboard.e2e-spec.ts`
+**Produces:** `computeMetrics(db, since?) → Metrics`; `GET /dashboard`, `GET /dashboard/metrics`, `POST /settings`.
+- [x] **Done:** a known scenario gives exact numbers (success 100%, p95 1905 ms over 20 samples, invite rate 50%, claim rate vouch 100% / public 50%, K-factor 1.0 = 0.5 + 0.5, plans that happened 1 of 2, oversold 0, drift 0); the cap form saves and redirects; light and dark mode render, with no overflow at 390px.
+
+### Buffer (est. 3h) — used for
+Debugging three real defects that tests caught: Dio's `Uint8List` stream, test migrations hitting the dev database, and the snapshot/subscribe gap. Also the iOS and macOS builds, the headless-Chrome runs, and this document.
 
 ---
 
-## ⚠️ Stubbed
+## 6. ⚠️ Stubbed (minimal version in this build)
 
-| Item | In this build | Why stubbed |
-| --- | --- | --- |
-| 50/90% hold warnings | Event + countdown UI; no email | An email provider takes setup time; the event already proves the timing is right. |
-| Seat cap | One editable `new_user_cap` for everyone | Fill-rate formula and restore rule aren't defined. |
-| Identity | Unverified, unique per field | Verification deferred by product decision. |
-| Deep links | `velio://` custom scheme | Universal / App Links need a hosted domain and signed association files. |
+| Item | In this build | Why stubbed | Full version |
+| --- | --- | --- | --- |
+| 50/90% hold warnings | `hold_warning_sent` event + countdown banners; **no email** | An email provider takes setup time; the event already proves the timing | Email now; push once bookers have a native app |
+| Seat cap | One editable `new_user_cap` for everyone | Fill-rate formula and restore rule are undefined | Per-user cap from fill history |
+| Identity | Unverified; phone and email each unique | Verification deferred by product decision | Phone one-time code; Gmail-dot and E.164 cleanup |
+| Deep links | `velio://` custom scheme | Universal / App Links need a hosted domain and signed association files | Universal Links + App Links |
+| Plan membership | Polled every 5s | Only counts need to be live | Push membership over the plan's stream |
+| Dashboard access | **No auth** (code comment in `dashboard.controller.ts`) | Auth is out of scope | Admin auth before deploying anywhere |
 
-## ❌ Not in the cut
+## 7. ❌ Not in the cut
 
 | Item | Reason (concise) |
 | --- | --- |
-| Guest without the app installed | Assumed out: invitees have the app. **High risk:** K-factor ≈ 0 under this assumption. Cheapest fix later is a React claim page (~4h). |
-| Cancellations (guest, booker, cascade to the Plan) | Rules are decided, but the cascading spot returns, solo-booking survival, and the "plan cancelled" page add ~6h that the budget doesn't have. |
-| Host capacity change | Depends on cancellation and bumping logic; blocking is the decided behaviour, so there's no user-facing loss yet. |
-| Fill-rate-based cap | Formula and "consistently filled" restore rule are still undefined; it can't be built without guessing. |
-| Waitlist | A new feature; there's no data yet that sold-out invites are a real drop-off. |
-| Email / push delivery | Needs a provider; iOS web push only works for sites added to the Home Screen, so bookers can't be reached reliably anyway. |
-| OTP verification + normalisation (Gmail dots, E.164) | Product decision deferred; adds a step that hurts the 25% claim target. |
-| Multi-instance scale testing | The Redis fan-out already supports it; there's no traffic to justify it. |
+| Guest without the app installed | Assumed out (invitees have the app). **High risk:** K-factor stays ≈ 0 under this assumption. Cheapest fix: a React claim page (~4h). |
+| Cancellations (guest, booker, cascade to the plan) | Rules are decided, but the cascading spot returns, solo-booking survival and the "plan cancelled" page add ~6h the budget didn't have. |
+| Host capacity change | Depends on cancellation and bumping rules; it's blocked by design, so users lose nothing yet. |
+| Fill-rate-based cap | Formula and "consistently filled" restore rule are undefined; can't be built without guessing. |
+| Waitlist | New feature; no data yet showing sold-out invites cause real drop-off. |
+| Email / push delivery | Needs a provider; iOS web push only works for sites added to the Home Screen. |
+| OTP verification + normalisation | Product decision deferred; an extra step hurts the 25% claim target. |
+| Multi-instance load testing | Redis fan-out is proven across two instances; no traffic to justify more. |
 | Payments, full auth, trust scores, host verification | Out of scope in the brief. |
 
 ---
 
-## Build order
+## 8. Build order (followed)
 
-1. **Tasks 1–6** — backend + concurrency proof. Nothing else matters if zero oversell isn't proven.
-2. **Task 7** — live availability.
-3. **Tasks 8–11** — React.
-4. **Tasks 12–13** — Flutter.
-5. **Task 14** — dashboard.
-6. Buffer — the demo.
+1. Tasks 1–6: backend and concurrency proof. *Nothing else matters if zero oversell isn't proven.*
+2. Task 7: live availability.
+3. Tasks 8–11: React, plus the added read endpoints.
+4. Tasks 12–13: Flutter.
+5. Task 14: dashboard.
 
-**If behind schedule, cut in this order:** Task 14 settings form (use SQL instead) → Task 11 polish → Task 13 SSE (fall back to polling every 2s).
+The fallback cut order (dashboard settings form → plan-page polish → Flutter SSE → polling) was never needed.
 
-## Open risks
+---
 
-1. **Guests without the app — HIGH.** See "Not in the cut".
-2. **Unverified identity — MEDIUM.** Vouches can be spoofed; new identities can inflate K-factor and dodge the cap.
-3. **40h across three codebases — MEDIUM.** Mitigated by the cut order above.
-4. **Assumed:** the new-user cap of 2 excludes the booker's own seat. **Confirm.**
-5. **Short hold windows:** a booking made 30 minutes before the activity gets a 10-minute window, so warnings land too late to help.
+## 9. Verification
+
+| Check | Result |
+| --- | --- |
+| `velio_server`: `npm test` · `npm run test:e2e` | 10 · 60 passing (repeated runs, no flakes); build and lint clean |
+| `velio_web`: `npm test` · `npm run build` · `npm run lint` | 9 passing; clean |
+| `velio_flutter`: `flutter analyze` · `flutter test` | No issues; 18 passing, including the real-server test |
+| Platform builds | `flutter build macos --debug` ✅ · `flutter build ios --debug --no-codesign` ✅ |
+| Real server smoke test | `curl -N` stream showed the snapshot and then the post-commit update |
+| Browser | Headless Chrome via `playwright-core` (the Claude in Chrome extension wasn't connected): every web flow in Tasks 9–11, light and dark dashboard screenshots |
+| **Not yet verified** | The Flutter UI on a real device or simulator (only a wireless iPad was available, which needs signing); a device opening `velio://` links from another app |
+
+---
+
+## 10. Open risks
+
+1. **Guests without the app — HIGH.** K-factor, the core metric, stays near zero if every guest already has the app. See Next step 1.
+2. **Dashboard has no auth — HIGH if deployed.** Anyone who can reach it can read metrics and change the cap.
+3. **Unverified identity — MEDIUM.** Vouches can be spoofed, and new identities can inflate K-factor and dodge the cap.
+4. **Flutter UI not seen on a device — MEDIUM.** Logic and widgets are tested; layout on real screens isn't.
+5. **Assumption to confirm:** the new-user cap of 2 excludes the booker's own seat.
+6. **Short hold windows:** a booking made 30 minutes before the activity gets a 10-minute window, so the 50% warning comes 5 minutes in.
+
+## 11. Next steps
+
+In priority order. Expand each into a step-level plan before starting.
+
+- [ ] **Web claim fallback (~4h):** a `velio_web` route `#/invite/:token` using the existing `GET /invites/:token` and claim endpoints, linked from the app-store fallback. Fixes risk 1.
+- [ ] **Run the Flutter app on a device or simulator (~1h):** open a link with `xcrun simctl openurl`, check the layout, claim, background the app for a minute, resume. Fixes risk 4.
+- [ ] **Dashboard auth (~1h):** a shared-secret header or basic auth on `/dashboard`, `/dashboard/metrics` and `/settings`. Fixes risk 2.
+- [ ] **Confirm the cap assumption** (risk 5); one migration if it changes.
+- [ ] **Cancellations (~6h):** the rules are already decided in the session file.
 
 ---
 
 ## Running locally
 
 ```bash
-docker compose up -d                                  # Postgres 16 + Redis 7
+docker compose up -d                                                     # Postgres 16 + Redis 7
 cd velio_server && npm install && npm run migrate && npm run start:dev   # API on :3000
-cd velio_web && npm install && npm run dev            # host + booker app on :5173
-cd velio_flutter && flutter run                       # guest app (simulator: localhost works)
-#   physical device: flutter run --dart-define=API_URL=http://<your-lan-ip>:3000
+cd velio_web && npm install && npm run dev                               # host + booker app on :5173
+cd velio_flutter && flutter run                                          # guest app (simulator: localhost works)
+#   physical device:  flutter run --dart-define=API_URL=http://<your-lan-ip>:3000
 #   Android emulator: flutter run --dart-define=API_URL=http://10.0.2.2:3000
 ```
 
 - **Dashboard:** http://localhost:3000/dashboard (metrics + the new-user cap). JSON at `/dashboard/metrics`.
-- **Open an invite on a device:** `xcrun simctl openurl booted "velio://invite/<token>"` (iOS) or `adb shell am start -d "velio://invite/<token>"` (Android), or paste the link/code on the app's home screen.
-
-**Tests**
+- **Open an invite on a device:** `xcrun simctl openurl booted "velio://invite/<token>"` (iOS) or `adb shell am start -d "velio://invite/<token>"` (Android), or paste the link or code on the app's home screen.
 
 | Where | Command | Notes |
 | --- | --- | --- |
-| `velio_server` | `npm test` / `npm run test:e2e` | e2e needs Docker up; uses a throwaway `velio_test` DB |
-| `velio_web` | `npm test` | pure logic (version merge, countdown) |
-| `velio_flutter` | `flutter test` | `live_backend_test.dart` runs against a local server, skips itself if none |
+| `velio_server` | `npm test` · `npm run test:e2e` | e2e needs Docker; recreates a throwaway `velio_test` database; files run one at a time |
+| `velio_web` | `npm test` | pure logic (version merge, countdown, progress) |
+| `velio_flutter` | `flutter test` | `live_backend_test.dart` runs against a local server and skips itself if none is running |

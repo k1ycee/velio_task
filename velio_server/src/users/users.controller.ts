@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Post, Res } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { DbService } from '../db/db.service.js';
 import { requireString } from '../common/http.js';
@@ -8,6 +8,13 @@ import { requireString } from '../common/http.js';
 @Controller('users')
 export class UsersController {
   constructor(private readonly db: DbService) {}
+
+  /** For the web identity picker. Names only — no contact details. */
+  @Get()
+  async list() {
+    const { rows } = await this.db.pool.query(`SELECT id, name FROM users ORDER BY id DESC LIMIT 100`);
+    return rows;
+  }
 
   @Post()
   async create(@Body() body: Record<string, unknown>, @Res({ passthrough: true }) res: Response) {

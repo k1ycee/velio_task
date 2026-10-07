@@ -12,12 +12,13 @@ import { ExpiryService } from './expiry/expiry.service.js';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LiveController } from './live/live.controller.js';
 import { LiveService } from './live/live.service.js';
+import { PlansController } from './plans/plans.controller.js';
 import { PgErrorFilter } from './common/http.js';
 import { APP_FILTER } from '@nestjs/core';
 
 @Module({
   imports: [DbModule, ScheduleModule.forRoot()],
-  controllers: [AppController, UsersController, ActivitiesController, BookingsController, InvitesController, LiveController],
+  controllers: [AppController, UsersController, ActivitiesController, BookingsController, InvitesController, LiveController, PlansController],
   providers: [AppService, BookingsService, InvitesService, ExpiryService, LiveService, { provide: APP_FILTER, useClass: PgErrorFilter }],
 })
 export class AppModule {}

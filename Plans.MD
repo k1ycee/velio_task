@@ -139,12 +139,12 @@ velio_project/
 
 ### M4 — Flutter: guest claim (6h)
 
-#### Task 12: Deep link + claim screen (4h)
+#### Task 12: Deep link + claim screen (4h) ✅
 **Files:** `velio_flutter/lib/main.dart`, `api.dart`, `claim_screen.dart`; iOS `Info.plist` and Android `AndroidManifest.xml` URL scheme
 - [ ] `velio://invite/<token>` opens the claim screen and sends `invite_opened`
 - [ ] Form: name, phone, email → claim → success / "sold out" / released-vouch fallback
 
-#### Task 13: Live count in Flutter (2h)
+#### Task 13: Live count in Flutter (2h) ✅
 **Files:** `lib/availability_stream.dart`
 - [ ] Streaming `http` SSE parser; snapshot on `AppLifecycleState.resumed`; reports `availability_received`
 - [ ] **Done when:** the count is correct after the app spends 1 minute in the background while another booking happens.

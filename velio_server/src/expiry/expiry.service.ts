@@ -1,13 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { DbService } from '../db/db.service.js';
+import { LiveService } from '../live/live.service.js';
 import { track } from '../track/track.js';
 
 @Injectable()
 export class ExpiryService {
   private readonly logger = new Logger(ExpiryService.name);
 
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly live: LiveService,
+  ) {}
 
   @Interval(60_000)
   async tick() {
@@ -26,7 +30,7 @@ export class ExpiryService {
    * Returns the ids of activities whose counts changed.
    */
   async releaseExpiredHolds(now = new Date()): Promise<string[]> {
-    return this.db.tx(async (c) => {
+    const released = await this.db.tx(async (c) => {
       const { rows } = await c.query<{ plan_id: string; activity_id: string; booker_id: string; n: number }>(
         `WITH released AS (
            UPDATE spots s SET status = 'released'
@@ -55,6 +59,15 @@ export class ExpiryService {
       }
       return [...perActivity.keys()];
     });
+
+    if (released.length) {
+      const { rows } = await this.db.pool.query<{ id: string; spots_left: number; version: string }>(
+        `SELECT id, spots_left, version FROM activities WHERE id = ANY($1::bigint[])`,
+        [released],
+      );
+      await Promise.all(rows.map((r) => this.live.publish(r.id, r.spots_left, Number(r.version))));
+    }
+    return released;
   }
 
   /**

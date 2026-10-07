@@ -7,6 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { DbService } from '../db/db.service.js';
+import { LiveService } from '../live/live.service.js';
 import { holdExpiresAt } from '../hold-window.js';
 import { readSetting } from '../settings.js';
 import { track } from '../track/track.js';
@@ -20,13 +21,16 @@ class NotEnoughSpots {
 
 @Injectable()
 export class BookingsService {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly live: LiveService,
+  ) {}
 
   /** Books the booker's own spot plus `heldSpots` for friends, all or nothing. */
   async book(bookerId: string, activityId: string, heldSpots: number) {
     const requested = heldSpots + 1;
     try {
-      return await this.db.tx(async (c) => {
+      const result = await this.db.tx(async (c) => {
         // ponytail: one cap for everyone; fill-rate-based caps are deferred (Plans.MD).
         const cap = await readSetting<number>(c, 'new_user_cap');
         if (heldSpots > cap) {
@@ -82,6 +86,8 @@ export class BookingsService {
           version: Number(activity.version),
         };
       });
+      await this.live.publish(activityId, result.spotsLeft, result.version);
+      return result;
     } catch (err) {
       if (err instanceof NotEnoughSpots) {
         await track(this.db.pool, 'booking_failed', { userId: bookerId, activityId }, {

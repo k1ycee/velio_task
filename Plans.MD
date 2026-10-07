@@ -119,7 +119,7 @@ velio_project/
 
 ### M2 — Live availability (4h)
 
-#### Task 7: Publish + SSE (4h)
+#### Task 7: Publish + SSE (4h) ✅
 **Files:** `src/live/*`, modify `bookings.service.ts`, `invites.service.ts`, `expiry.service.ts`
 **Produces:** `publishAvailability(activityId)` (called after commit); `GET /activities/:id/stream` (SSE); `POST /events` for client-side events.
 - [ ] One Redis subscriber per server process, which passes updates on to the SSE connections for that activity

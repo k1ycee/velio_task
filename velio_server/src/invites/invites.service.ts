@@ -9,6 +9,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { DbService } from '../db/db.service.js';
+import { LiveService } from '../live/live.service.js';
 import { track } from '../track/track.js';
 
 export type InviteType = 'vouch' | 'public';
@@ -43,7 +44,10 @@ class NoSpotLeft {}
 
 @Injectable()
 export class InvitesService {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly live: LiveService,
+  ) {}
 
   /** Vouch: binds one unbound held spot (201). Public: one reusable URL per plan (201 new, 200 existing). */
   async create(userId: string, planId: string, type: InviteType, label: string | null) {
@@ -117,7 +121,7 @@ export class InvitesService {
 
   async claim(userId: string, token: string) {
     try {
-      return await this.db.tx(async (c) => {
+      const result = await this.db.tx(async (c) => {
         const { rows } = await c.query<
           InviteRow & { activity_id: string; booker_id: string; starts_at: Date }
         >(
@@ -199,6 +203,9 @@ export class InvitesService {
           version: Number(counts.version),
         };
       });
+      // Claiming a held spot doesn't change the count; only open-pool claims do.
+      if (result.source === 'open') await this.live.publish(result.activityId, result.spotsLeft, result.version);
+      return result;
     } catch (err) {
       if (err instanceof NoSpotLeft) {
         await this.trackFailure(userId, token, 'race_lost');

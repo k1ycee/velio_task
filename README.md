@@ -7,6 +7,9 @@ A host creates an **Activity** with limited spots. A **booker** books their own 
 | `velio_server/` | API, live updates, hold-expiry job, metrics dashboard | NestJS 12 (ESM) · Postgres 16 · Redis 7 |
 | `velio_web/` | Host + booker app | React 19 + Vite |
 | `velio_flutter/` | Invited-guest app | Flutter 3.44 · Riverpod · Dio |
+| `docker-compose.yml` | Runs Postgres, Redis, the API and the web app together | Docker Compose |
+
+**Status:** all 14 planned tasks are built. 97 automated tests pass (server 10 unit + 60 database, web 9, Flutter 18), and the flows were also run in headless Chrome, on an iOS simulator, and against the Docker stack.
 
 **More docs:**
 - [`PLANS.md`](PLANS.md): the plan and what was built.
@@ -33,7 +36,14 @@ flutter pub get
 flutter run                                # pick the iOS simulator; localhost works there
 ```
 
-Rebuild after code changes with `docker compose up -d --build`. Logs: `docker compose logs -f server`. Stop: `docker compose down` (add `-v` to wipe the database).
+The first build takes a minute or two. Check it's up with `docker compose ps` (four services, `running`), then open http://localhost:5173.
+
+| Task | Command |
+| --- | --- |
+| Rebuild after code changes | `docker compose up -d --build` |
+| Follow the API logs | `docker compose logs -f server` |
+| Stop (keep data) | `docker compose down` |
+| Stop and wipe the database | `docker compose down -v` |
 
 **Hot-reload development (optional).** Start only the data stores, then run the apps with npm. Don't run both setups at once, because they use the same ports.
 
@@ -55,11 +65,13 @@ cd velio_web && npm install && npm run dev                               # :5173
 **Tests:**
 
 ```bash
-cd velio_server && npm test && npm run test:e2e   # 10 unit + 60 against a throwaway velio_test DB
+cd velio_server && npm test && npm run test:e2e   # 10 unit + 60 against a throwaway velio_test DB (needs Postgres up)
 cd velio_web && npm test                          # 9
 cd velio_flutter && flutter test                  # 18 (one hits the live API; skips if it's down)
 cd velio_server && ./scripts/race-demo.sh         # live oversell race: 20 guests, 1 last spot
 ```
+
+Defaults suit the npm dev setup; `docker-compose.yml` sets the container values (e.g. `DATABASE_URL` points at the `postgres` service).
 
 | Env var | Default | Used by |
 | --- | --- | --- |
@@ -86,6 +98,17 @@ cd velio_server && ./scripts/race-demo.sh         # live oversell race: 20 guest
    │ expiry job (every 60s) · events table · /dashboard                    │
    └───────────────────────────────────────────────────────────────────────┘
 ```
+
+**How it runs.** `docker compose up` starts four containers:
+
+| Service | Image | Port | Notes |
+| --- | --- | --- | --- |
+| `postgres` | `postgres:16` | 5432 | Data in the `pgdata` volume; health check `pg_isready` |
+| `redis` | `redis:7` | 6379 | Pub/sub only, no data kept; health check `redis-cli ping` |
+| `server` | built from `velio_server/Dockerfile` | 3000 | Two-stage build; starts only once both stores are healthy; runs pending migrations, then the API |
+| `web` | built from `velio_web/Dockerfile` | 5173 → 80 | Vite production build served by nginx |
+
+The Flutter app runs outside Docker (simulator or phone) and talks to the API on port 3000.
 
 **Domain.**
 - An `activity` has `capacity`, `spots_left` and a `version`.
@@ -143,15 +166,16 @@ There are no application locks and no Redis counters. The database decides.
 
 | Planned | Built | Why |
 | --- | --- | --- |
-| Fastify | **NestJS 12 (ESM)** | Your call at kickoff |
+| Fastify | **NestJS 12 (ESM)** | Chosen at kickoff |
 | One SSE stream per activity | **+ an all-activities stream** | Browsers allow only 6 connections per host on HTTP/1.1; list pages need one connection |
 | Snapshot, then updates | **Subscribe, then snapshot** | Closes a gap where a commit could be missed |
 | Claim failure `sold_out` | **`race_lost` everywhere**, plus `duplicate` and `no_held_spot` | One reason for "no spot at commit" keeps the 99.5% calculation clean |
 | Flutter sends `invite_opened` | **The server records it** on `GET /invites/:token` | More reliable; clients can't forge business events (`POST /events` accepts only latency reports) |
 | Read endpoints not planned | `GET /activities`, `/plans`, `/plans/:id`, `/users` | The web pages needed them |
-| Flutter: 3 files with `http` | **Your preferred mobile architecture** (view → view model → repository → Dio client), plus a paste-a-code home screen and a `--dart-define=INVITE` launch shortcut | Your house style; the scope says guests arrive "by link **or code**" |
+| Flutter: 3 files with `http` | **The team's preferred mobile architecture** (view → view model → repository → Dio client), plus a paste-a-code home screen and a `--dart-define=INVITE` launch shortcut | Team house style; the scope says guests arrive "by link **or code**" |
 | Dashboard: HTML only | + JSON, a **count-drift** check, and `queries/metrics.sql` | Scriptable, and catches bookkeeping bugs the oversell check can't |
 | Not planned | `scripts/race-demo.sh` | Shows zero oversell live |
+| Docker only for Postgres + Redis; API and web run with npm | **`docker compose up -d --build` runs the whole stack** (npm kept for hot reload) | One command to start everything for reviewers and demos |
 
 Nothing in the cut was dropped. All 14 planned tasks shipped.
 
@@ -180,6 +204,8 @@ Nothing in the cut was dropped. All 14 planned tasks shipped.
 | Plan membership polled every 5s | Up to 5s stale (counts themselves are live) | Push membership over SSE |
 | Cancellations / capacity edits not built | Rules decided, not implemented | ~6h, rules in the session file |
 | Hand-written SQL migrations, no ORM | No rollbacks | A migration tool |
+| Web API URL baked in at image build time | Pointing the web app at another API means rebuilding | Serve a runtime `config.js`, or put the API behind the same origin |
+| Credentials in `docker-compose.yml`, no TLS | Fine locally, not elsewhere | Secrets manager; TLS at the load balancer |
 | Publish-after-commit isn't guaranteed | If the process dies between commit and publish, live clients miss one update until they resync | Transactional outbox or `LISTEN/NOTIFY` |
 
 ### Taking it to production
@@ -194,7 +220,10 @@ Nothing in the cut was dropped. All 14 planned tasks shipped.
    - Partition `events` by month, or stream it to a warehouse (the schema is already analytics-friendly).
    - Add an `arm` property for experiments (see OWNERSHIP.md).
 5. **Jobs:** the expiry job is idempotent and lock-safe, so it can run on every instance. For efficiency, add a leader lock or move it to a scheduled worker.
-6. **Operations:** health checks, structured logs, latency/error SLO alerts (the p95 query already exists), CI running all three test suites, and backups.
+6. **Operations:**
+   - The server and web images already exist. Push them to a registry and deploy them to an orchestrator (ECS, Cloud Run, Kubernetes) with managed Postgres and Redis.
+   - Add an HTTP health endpoint for the API (Compose only checks the data stores today).
+   - Structured logs, latency and error alerts (the p95 query already exists), CI that runs all three test suites and builds the images, and database backups.
 7. **Product:** Universal Links with rich previews, the web claim fallback, real notifications, and cancellations.
 
 ---

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fpdart/fpdart.dart';
@@ -12,15 +14,15 @@ import 'package:velio_flutter/views/home/widget/flash_bar.dart';
 import 'fakes.dart';
 
 Future<void> pumpHome(WidgetTester tester, FakeRepo repo) async {
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      inviteRepo.overrideWithValue(repo),
-      storageService.overrideWithValue(FakeStorage()),
-    ],
-    child: Consumer(
-      builder: (_, ref, _) => MaterialApp(navigatorKey: ref.read(navigationService).navigatorKey, home: const HomeScreen()),
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [inviteRepo.overrideWithValue(repo), storageService.overrideWithValue(FakeStorage())],
+      child: Consumer(
+        builder: (_, ref, _) =>
+            MaterialApp(navigatorKey: ref.read(navigationService).navigatorKey, home: const HomeScreen()),
+      ),
     ),
-  ));
+  );
 }
 
 /// Pumps fixed steps instead of pumpAndSettle, which would run the flashbar's whole 2.5s animation.
@@ -42,8 +44,23 @@ bool flashBarShown(WidgetTester tester) =>
     tester.getTopLeft(find.byType(Stack).first).dy;
 
 void main() {
-  testWidgets('a used vouch link shows a flashbar on the invite page and does not open the claim page',
-      (tester) async {
+  testWidgets('while checking an invite the button says so and the field locks', (tester) async {
+    final repo = FakeRepo()
+      ..details = invite(used: true)
+      ..inviteGate = Completer();
+    await pumpHome(tester, repo);
+    await tester.enterText(find.byType(TextField), 'sometoken1');
+    await tester.tap(find.text('Open invite'));
+    await tester.pump(const Duration(milliseconds: 200)); // the check is in flight
+
+    expect(find.text('Checking invite…'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
+    repo.inviteGate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Open invite'), findsOneWidget);
+  });
+
+  testWidgets('a used vouch link shows a flashbar on the invite page and does not open the claim page', (tester) async {
     await pumpHome(tester, FakeRepo()..details = invite(used: true));
     await openInvite(tester, 'velio://invite/usedtoken1');
 

@@ -30,6 +30,12 @@ InviteDetails invite({String type = 'vouch', bool used = false, int spotsLeft = 
 class FakeRepo implements InviteRepository {
   InviteDetails details = invite();
   Either<RequestFailure, ClaimResult>? claimResponse;
+
+  /// When set, invite lookups wait for it, so tests can look at the "checking" state.
+  Completer<void>? inviteGate;
+
+  /// When set, claims wait for it, so tests can look at the in-flight state.
+  Completer<void>? claimGate;
   final live = StreamController<Availability>.broadcast();
   final reported = <Availability>[];
   final createdUsers = <String>[];
@@ -41,6 +47,7 @@ class FakeRepo implements InviteRepository {
   Future<Either<RequestFailure, InviteDetails>> getInvite(String token, {String? userId}) async {
     openedWithUser = userId;
     getInviteCalls++;
+    await inviteGate?.future;
     return token == 'missing'
         ? left(const RequestFailure(message: 'invite not found', statusCode: 404))
         : right(details);
@@ -55,6 +62,7 @@ class FakeRepo implements InviteRepository {
   @override
   Future<Either<RequestFailure, ClaimResult>> claim(String token, String userId) async {
     claimedWithUser = userId;
+    await claimGate?.future;
     return claimResponse!;
   }
 
@@ -62,8 +70,7 @@ class FakeRepo implements InviteRepository {
   Stream<Availability> availability(String activityId) => live.stream;
 
   @override
-  Future<void> reportLatency(Availability update, DateTime receivedAt, String? userId) async =>
-      reported.add(update);
+  Future<void> reportLatency(Availability update, DateTime receivedAt, String? userId) async => reported.add(update);
 }
 
 class FakeStorage implements StorageService {
@@ -75,13 +82,13 @@ class FakeStorage implements StorageService {
 }
 
 ClaimResult result({String source = 'held', int spotsLeft = 4, int version = 1}) => ClaimResult.fromJson({
-      'spotId': '99',
-      'planId': '3',
-      'activityId': '11',
-      'source': source,
-      'spotsLeft': spotsLeft,
-      'version': version,
-    });
+  'spotId': '99',
+  'planId': '3',
+  'activityId': '11',
+  'source': source,
+  'spotsLeft': spotsLeft,
+  'version': version,
+});
 
 class FakeNav extends NavigationService {
   InviteDetails? opened;
@@ -111,9 +118,13 @@ class FakeActivityRepo implements ActivityRepository {
   Either<RequestFailure, List<MyActivity>> response = right(const []);
   String? askedFor;
 
+  /// When set, loads wait for it, so tests can look at the loading state.
+  Completer<void>? gate;
+
   @override
   Future<Either<RequestFailure, List<MyActivity>>> myActivities(String userId) async {
     askedFor = userId;
+    await gate?.future;
     return response;
   }
 }

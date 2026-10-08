@@ -172,7 +172,7 @@ psql "UPDATE plans SET hold_expires_at = now() WHERE id = <id>;"   # expire it
 ```bash
 cd velio_server && npm test && npm run test:e2e      # 10 unit + 62 database tests (recreates a velio_test DB)
 cd velio_web && npm test                             # 13
-cd velio_flutter && flutter test                     # 28 (one runs against the live API, skips if it's down)
+cd velio_flutter && flutter test                     # 31 (one runs against the live API, skips if it's down)
 ```
 
 ---

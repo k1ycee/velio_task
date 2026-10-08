@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fpdart/fpdart.dart';
@@ -7,6 +9,7 @@ import 'package:velio_flutter/core/repositories/request_failure.dart';
 import 'package:velio_flutter/core/view_models/invite_entry_vm.dart';
 import 'package:velio_flutter/core/view_models/my_activities_vm.dart';
 import 'package:velio_flutter/views/controller/controller_screen.dart';
+import 'package:velio_flutter/widgets/skeleton.dart';
 
 import 'fakes.dart';
 
@@ -95,5 +98,38 @@ void main() {
     expect(find.text('Got an invite?'), findsOneWidget);
     expect(find.text(usedVouchMessage), findsOneWidget);
     await tester.pumpAndSettle(); // let the flashbar finish
+  });
+
+  testWidgets('first load shows skeleton cards (after a short delay) instead of a spinner', (tester) async {
+    final activities = FakeActivityRepo()..gate = Completer();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          inviteRepo.overrideWithValue(FakeRepo()),
+          activityRepo.overrideWithValue(activities),
+          storageService.overrideWithValue(FakeStorage()..id = '42'),
+        ],
+        child: Consumer(
+          builder: (_, ref, _) =>
+              MaterialApp(navigatorKey: ref.read(navigationService).navigatorKey, home: const ControllerScreen()),
+        ),
+      ),
+    );
+    await tester.tap(find.text('My activities'));
+    await tester.pump();
+
+    final fade = find.descendant(of: find.byType(Skeleton), matching: find.byType(FadeTransition)).first;
+    expect(tester.widget<FadeTransition>(fade).opacity.value, 0); // a fast load never flashes it
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.widget<FadeTransition>(fade).opacity.value, 1);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.bySemanticsLabel('Loading your activities'), findsOneWidget);
+
+    activities
+      ..response = right([mine('Sunset Kayaking', DateTime.now().add(const Duration(days: 2)))])
+      ..gate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(Skeleton), findsNothing);
+    expect(find.text('Sunset Kayaking'), findsOneWidget);
   });
 }

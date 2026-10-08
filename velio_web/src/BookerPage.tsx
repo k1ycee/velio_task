@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api, type Activity, type PlanSummary } from './api';
 import { currentSpotsLeft, useLiveCounts } from './live';
 import { SpotsLeft } from './SpotsLeft';
+import { Skeleton } from './Skeleton';
 import { formatWhen } from './time';
 
 export function BookerPage({ userId }: { userId: string }) {
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<Activity[] | null>(null); // null until the first load
   const [plans, setPlans] = useState<PlanSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { counts, seed, resyncKey } = useLiveCounts(userId);
@@ -45,7 +46,9 @@ export function BookerPage({ userId }: { userId: string }) {
       <section>
         <h1>Book an activity</h1>
         {error && <p className="error">{error}</p>}
-        {activities.length === 0 ? (
+        {activities === null ? (
+          !error && <Skeleton heights={[64, 64, 64]} label="Loading activities" />
+        ) : activities.length === 0 ? (
           <p className="empty">No upcoming activities. Switch to Host to create one.</p>
         ) : (
           <ul className="list">
@@ -90,7 +93,7 @@ function BookForm({ userId, activity, spotsLeft }: { userId: string; activity: A
       if (!(err instanceof ApiError)) return setMessage((err as Error).message);
       const body = err.body ?? {};
       if (err.status === 422) {
-        setMessage(`You can hold up to ${body.cap} spots for friends.`);
+        setMessage(`You can hold up to ${body.cap} spot${body.cap === 1 ? '' : 's'} for friends.`);
       } else if (err.status === 409 && body.reason === 'race_lost') {
         const available = Number(body.available);
         // Never book fewer than asked without the booker saying so.
@@ -120,8 +123,8 @@ function BookForm({ userId, activity, spotsLeft }: { userId: string; activity: A
           ))}
         </select>
       </label>
-      <button type="button" onClick={() => book(held)} disabled={busy || spotsLeft === 0}>
-        {spotsLeft === 0 ? 'Sold out' : `Book ${held + 1}`}
+      <button type="button" onClick={() => book(held)} disabled={busy || spotsLeft === 0} aria-busy={busy}>
+        {spotsLeft === 0 ? 'Sold out' : busy ? 'Booking…' : `Book ${held + 1}`}
       </button>
       {message && <p className="error">{message}</p>}
     </div>

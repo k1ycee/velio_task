@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fpdart/fpdart.dart';
@@ -11,13 +13,14 @@ import 'fakes.dart';
 
 Future<FakeRepo> pumpClaim(WidgetTester tester, {FakeRepo? repo}) async {
   final fake = repo ?? FakeRepo();
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      inviteRepo.overrideWithValue(fake),
-      storageService.overrideWithValue(FakeStorage()),
-    ],
-    child: MaterialApp(home: ClaimScreen(token: 'tok', invite: fake.details)),
-  ));
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [inviteRepo.overrideWithValue(fake), storageService.overrideWithValue(FakeStorage())],
+      child: MaterialApp(
+        home: ClaimScreen(token: 'tok', invite: fake.details),
+      ),
+    ),
+  );
   await tester.pumpAndSettle();
   return fake;
 }
@@ -62,5 +65,25 @@ void main() {
     await fillAndClaim(tester);
     expect(find.text('Sorry, that spot was just taken.'), findsOneWidget);
     expect(find.text('No spots left for this one.'), findsOneWidget);
+  });
+
+  testWidgets('while claiming: the button says so with a spinner and the fields lock', (tester) async {
+    final repo = await pumpClaim(tester);
+    repo
+      ..claimResponse = right(result())
+      ..claimGate = Completer();
+    await tester.enterText(find.widgetWithText(TextFormField, 'Your name'), 'Guest');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Phone'), '+15551234');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'g@x.com');
+    await tester.tap(find.text('Claim my spot'));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('Claiming your spot…'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField).first).enabled, isFalse);
+
+    repo.claimGate!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text("You're in! See you there."), findsOneWidget);
   });
 }

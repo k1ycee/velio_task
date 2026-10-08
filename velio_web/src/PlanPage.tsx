@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiError, api, type Invite, type Plan } from './api';
 import { vouchBlockedReason } from './invites';
 import { useLiveCounts } from './live';
+import { Skeleton } from './Skeleton';
 import { SpotsLeft } from './SpotsLeft';
 import { formatCountdown, formatWhen, holdProgress, useNow } from './time';
 
@@ -31,7 +32,7 @@ export function PlanPage({ userId, planId }: { userId: string; planId: string })
   }, [load]);
 
   if (error && !plan) return <p className="error">{error}</p>;
-  if (!plan) return <p className="empty">Loading…</p>;
+  if (!plan) return <Skeleton heights={[150, 90, 170]} label="Loading your plan" />;
 
   const start = new Date(plan.holdStartedAt);
   const end = new Date(plan.holdExpiresAt);
@@ -109,9 +110,12 @@ function InviteSection({
   vouchBlocked: string | null;
 }) {
   const [message, setMessage] = useState<string | null>(null);
+  const [pending, setPending] = useState<Invite['type'] | null>(null);
   const hasPublic = plan.invites.some((i) => i.type === 'public');
 
   async function create(type: Invite['type'], label?: string) {
+    if (pending) return; // a double click must not spend two held spots
+    setPending(type);
     setMessage(null);
     try {
       await api(`/plans/${plan.id}/invites`, { userId, body: { type, label } });
@@ -119,6 +123,9 @@ function InviteSection({
     } catch (err) {
       const reason = err instanceof ApiError ? err.body?.reason : null;
       setMessage(reason === 'no_held_spot' ? 'Every held spot already has a vouch link.' : (err as Error).message);
+      throw err;
+    } finally {
+      setPending(null);
     }
   }
 
@@ -126,7 +133,7 @@ function InviteSection({
     e.preventDefault();
     const formEl = e.currentTarget;
     const label = String(new FormData(formEl).get('label') ?? '').trim();
-    create('vouch', label || undefined).then(() => formEl.reset());
+    create('vouch', label || undefined).then(() => formEl.reset(), () => undefined);
   }
 
   return (
@@ -139,15 +146,26 @@ function InviteSection({
             placeholder="Who are you vouching for?"
             aria-label="Friend's name"
             aria-describedby={vouchBlocked ? 'vouch-blocked' : undefined}
-            disabled={!!vouchBlocked}
+            disabled={!!vouchBlocked || pending === 'vouch'}
           />
-          <button type="submit" disabled={!!vouchBlocked} title="I stand behind this person — one link per friend">
-            Create vouch link
+          <button
+            type="submit"
+            disabled={!!vouchBlocked || !!pending}
+            aria-busy={pending === 'vouch'}
+            title="I stand behind this person — one link per friend"
+          >
+            {pending === 'vouch' ? 'Creating link…' : 'Create vouch link'}
           </button>
         </form>
         {!hasPublic && (
-          <button type="button" className="ghost" onClick={() => create('public')}>
-            Get public link
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => create('public').catch(() => undefined)}
+            disabled={!!pending}
+            aria-busy={pending === 'public'}
+          >
+            {pending === 'public' ? 'Creating link…' : 'Get public link'}
           </button>
         )}
       </div>

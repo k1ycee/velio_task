@@ -6,6 +6,7 @@ import type { useIdentity } from './useIdentity';
 export function IdentityBar({ identity }: { identity: ReturnType<typeof useIdentity> }) {
   const [users, setUsers] = useState<User[]>([]);
   const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -16,6 +17,7 @@ export function IdentityBar({ identity }: { identity: ReturnType<typeof useIdent
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const body = { name: form.get('name'), phone: form.get('phone'), email: form.get('email') };
+    setSaving(true);
     try {
       setError(null);
       const { id } = await api<{ id: string }>('/users', { body });
@@ -23,6 +25,8 @@ export function IdentityBar({ identity }: { identity: ReturnType<typeof useIdent
       setCreating(false);
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -32,7 +36,9 @@ export function IdentityBar({ identity }: { identity: ReturnType<typeof useIdent
         <input name="name" placeholder="Name" required aria-label="Name" />
         <input name="phone" placeholder="Phone" required aria-label="Phone" inputMode="tel" />
         <input name="email" placeholder="Email" required aria-label="Email" type="email" />
-        <button type="submit">Save</button>
+        <button type="submit" disabled={saving} aria-busy={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
         <button type="button" className="ghost" onClick={() => setCreating(false)}>
           Cancel
         </button>

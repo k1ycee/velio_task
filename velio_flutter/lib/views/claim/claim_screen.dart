@@ -62,25 +62,44 @@ class _Invite extends StatelessWidget {
         const SizedBox(height: 4),
         Text('${when.formatFullDate(startsAt)} · ${when.formatTimeOfDay(TimeOfDay.fromDateTime(startsAt))}'),
         const SizedBox(height: 16),
-        Align(alignment: Alignment.centerLeft, child: SpotsLeftChip(spotsLeft: vm.spotsLeft, capacity: invite.activity.capacity)),
-        if (invite.isVouch) ...[
-          const SizedBox(height: 12),
-          const Text('A spot is being held for you.'),
-        ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SpotsLeftChip(spotsLeft: vm.spotsLeft, capacity: invite.activity.capacity),
+        ),
+        if (invite.isVouch) ...[const SizedBox(height: 12), const Text('A spot is being held for you.')],
         const SizedBox(height: 24),
         if (vm.message != null) ...[
           _Banner(text: vm.message!, isError: vm.status != ClaimStatus.claimed),
           const SizedBox(height: 16),
         ],
-        switch (vm.status) {
-          ClaimStatus.claimed => const _Message(icon: Icons.check_circle, text: "You're in! See you there."),
-          ClaimStatus.soldOut => const _Message(icon: Icons.event_busy, text: 'No spots left for this one.'),
-          _ => ClaimForm(
+        // The form gives way to the outcome with a short fade and pop; the form keeps one key
+        // across ready/claiming so its fields aren't rebuilt mid-claim.
+        AnimatedSwitcher(
+          duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 350),
+          switchInCurve: Curves.easeOutBack,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(animation), child: child),
+          ),
+          child: switch (vm.status) {
+            ClaimStatus.claimed => const _Message(
+              key: ValueKey('claimed'),
+              icon: Icons.check_circle,
+              text: "You're in! See you there.",
+            ),
+            ClaimStatus.soldOut => const _Message(
+              key: ValueKey('soldOut'),
+              icon: Icons.event_busy,
+              text: 'No spots left for this one.',
+            ),
+            _ => ClaimForm(
+              key: const ValueKey('form'),
               busy: vm.status == ClaimStatus.claiming,
               soldOut: vm.spotsLeft == 0 && !invite.isVouch,
               onSubmit: (name, phone, email) => vm.claim(name: name, phone: phone, email: email),
             ),
-        },
+          },
+        ),
       ],
     );
   }
@@ -107,7 +126,7 @@ class _Banner extends StatelessWidget {
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.icon, required this.text});
+  const _Message({super.key, required this.icon, required this.text});
 
   final IconData icon;
   final String text;

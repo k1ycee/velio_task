@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 
+import '../../../widgets/busy_button.dart';
+
 class ClaimForm extends HookWidget {
   const ClaimForm({super.key, required this.busy, required this.soldOut, required this.onSubmit});
 
@@ -29,6 +31,7 @@ class ClaimForm extends HookWidget {
           children: [
             TextFormField(
               controller: name,
+              enabled: !busy,
               decoration: const InputDecoration(labelText: 'Your name'),
               textInputAction: TextInputAction.next,
               autofillHints: const [AutofillHints.name],
@@ -37,6 +40,7 @@ class ClaimForm extends HookWidget {
             const SizedBox(height: 12),
             TextFormField(
               controller: phone,
+              enabled: !busy,
               decoration: const InputDecoration(labelText: 'Phone'),
               keyboardType: TextInputType.phone,
               textInputAction: TextInputAction.next,
@@ -46,6 +50,7 @@ class ClaimForm extends HookWidget {
             const SizedBox(height: 12),
             TextFormField(
               controller: email,
+              enabled: !busy,
               decoration: const InputDecoration(labelText: 'Email'),
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.done,
@@ -54,12 +59,11 @@ class ClaimForm extends HookWidget {
               onFieldSubmitted: (_) => submit(),
             ),
             const SizedBox(height: 20),
-            FilledButton(
-              onPressed: busy || soldOut ? null : submit,
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-              child: busy
-                  ? const SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
-                  : Text(soldOut ? 'Sold out' : 'Claim my spot'),
+            BusyButton(
+              label: soldOut ? 'Sold out' : 'Claim my spot',
+              busyLabel: 'Claiming your spot…',
+              busy: busy,
+              onPressed: soldOut ? null : submit,
             ),
           ],
         ),

@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../utils/invite_token.dart';
+import '../../widgets/busy_button.dart';
 import 'widget/flash_bar.dart';
 
 /// Shown when the app is opened without an invite link: guests can paste a link or code.
@@ -42,19 +43,14 @@ class HomeScreen extends HookConsumerWidget {
                   const SizedBox(height: 20),
                   TextField(
                     controller: code,
+                    enabled: !vm.opening,
                     decoration: InputDecoration(labelText: 'Invite link or code', errorText: error.value),
                     autocorrect: false,
                     textInputAction: TextInputAction.go,
                     onSubmitted: (_) => open(),
                   ),
                   const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: vm.opening ? null : open,
-                    style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                    child: vm.opening
-                        ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Open invite'),
-                  ),
+                  BusyButton(label: 'Open invite', busyLabel: 'Checking invite…', busy: vm.opening, onPressed: open),
                 ],
               ),
             ),

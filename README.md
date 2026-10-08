@@ -9,7 +9,7 @@ A host creates an **Activity** with limited spots. A **booker** books their own 
 | `velio_flutter/` | Invited-guest app | Flutter 3.44 · Riverpod · Dio |
 | `docker-compose.yml` | Runs Postgres, Redis, the API and the web app together | Docker Compose |
 
-**Status:** all 14 planned tasks are built. 113 automated tests pass (server 10 unit + 62 database, web 13, Flutter 28), and the flows were also run in headless Chrome, on an iOS simulator, and against the Docker stack.
+**Status:** all 14 planned tasks are built. 116 automated tests pass (server 10 unit + 62 database, web 13, Flutter 31), and the flows were also run in headless Chrome, on an iOS simulator, and against the Docker stack.
 
 **More docs:**
 - [`PLANS.md`](PLANS.md): the plan and what was built.
@@ -67,7 +67,7 @@ cd velio_web && npm install && npm run dev                               # :5173
 ```bash
 cd velio_server && npm test && npm run test:e2e   # 10 unit + 62 against a throwaway velio_test DB (needs Postgres up)
 cd velio_web && npm test                          # 13
-cd velio_flutter && flutter test                  # 28 (one hits the live API; skips if it's down)
+cd velio_flutter && flutter test                  # 31 (one hits the live API; skips if it's down)
 cd velio_server && ./scripts/race-demo.sh         # live oversell race: 20 guests, 1 last spot
 ```
 
@@ -188,7 +188,7 @@ Nothing in the cut was dropped. All 14 planned tasks shipped.
 1. **Correct counts first.** Zero oversell is the one target that can't be fixed after launch, so the transactional core and its concurrency tests came before any UI.
 2. **Measurability second.** Every target has an event and a query, so the product targets can be argued with data rather than guesses.
 3. **Product breadth third:** the whole loop (host → booker → vouch/public → guest claim → live counts) end to end, over polishing any one screen.
-4. **Tests before code throughout:** 113 automated tests in total, plus headless-browser and iOS-simulator runs.
+4. **Tests before code throughout:** 116 automated tests in total, plus headless-browser and iOS-simulator runs.
 
 ### Shortcuts taken (on purpose)
 

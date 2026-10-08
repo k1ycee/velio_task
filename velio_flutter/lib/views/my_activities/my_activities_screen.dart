@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../core/api/models/my_activity_model.dart';
 import '../../core/providers.dart';
 import '../../core/view_models/my_activities_vm.dart';
+import '../../widgets/skeleton.dart';
 
 /// Every activity the guest booked or claimed, with its date. Pull down to refresh.
 class MyActivitiesScreen extends ConsumerWidget {
@@ -16,9 +17,9 @@ class MyActivitiesScreen extends ConsumerWidget {
 
     final List<Widget> children = switch (vm.status) {
       MyActivitiesStatus.loading => const [
-        Padding(
-          padding: EdgeInsets.all(48),
-          child: Center(child: CircularProgressIndicator()),
+        Skeleton(
+          label: 'Loading your activities',
+          child: Column(children: [_SkeletonTile(), _SkeletonTile(), _SkeletonTile()]),
         ),
       ],
       _ when vm.upcoming.isEmpty && vm.past.isEmpty => [
@@ -72,6 +73,40 @@ class _ActivityTile extends StatelessWidget {
         title: Text(item.activity.title, style: past ? TextStyle(color: muted) : null),
         subtitle: Text('$when\n${item.isBooker ? 'You booked this' : 'With ${item.bookerName}'}'),
         isThreeLine: true,
+      ),
+    );
+  }
+}
+
+/// Same shape as [_ActivityTile]: icon, title, date line, "with" line.
+class _SkeletonTile extends StatelessWidget {
+  const _SkeletonTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Card(
+      margin: EdgeInsets.only(top: 8),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SkeletonBox(width: 24, height: 24, radius: 12),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkeletonBox(width: 160, height: 16),
+                  SizedBox(height: 8),
+                  SkeletonBox(width: 220, height: 12),
+                  SizedBox(height: 6),
+                  SkeletonBox(width: 90, height: 12),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

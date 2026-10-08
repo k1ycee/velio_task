@@ -100,6 +100,37 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .badge.vouch { background: var(--vouch-bg); color: var(--vouch); }
 .link-text { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; flex: 1; min-width: 0; }
 
+/* Loading states. Skeletons fade in after 150ms so fast loads don't flash; a busy button keeps
+   its colour (it's working, not unavailable) and shows an inline spinner before its label. */
+.skeleton { display: flex; flex-direction: column; gap: 8px; opacity: 0; animation: appear 0s linear 150ms forwards; }
+.skeleton-block {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: linear-gradient(90deg, var(--surface) 25%, var(--border) 50%, var(--surface) 75%) 0 0 / 300% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+button[aria-busy='true'] { cursor: progress; }
+button[aria-busy='true']:disabled { opacity: 0.85; }
+button[aria-busy='true']::before {
+  content: '';
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.5em;
+  vertical-align: -0.1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes appear { to { opacity: 1; } }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block { animation: none; }
+  button[aria-busy='true']::before { animation-duration: 2s; }
+}
+
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 @media (max-width: 640px) {

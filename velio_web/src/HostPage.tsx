@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, type Activity } from './api';
 import { useLiveCounts } from './live';
 import { SpotsLeft } from './SpotsLeft';
+import { Skeleton } from './Skeleton';
 import { formatWhen } from './time';
 
 export function HostPage({ userId }: { userId: string }) {
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<Activity[] | null>(null); // null until the first load
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const { counts, seed, resyncKey } = useLiveCounts(userId);
 
@@ -23,6 +25,7 @@ export function HostPage({ userId }: { userId: string }) {
     e.preventDefault();
     const formEl = e.currentTarget;
     const form = new FormData(formEl);
+    setCreating(true);
     try {
       setError(null);
       await api('/activities', {
@@ -37,6 +40,8 @@ export function HostPage({ userId }: { userId: string }) {
       load();
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -57,14 +62,18 @@ export function HostPage({ userId }: { userId: string }) {
             Spots
             <input name="capacity" type="number" min={1} defaultValue={10} required />
           </label>
-          <button type="submit">Create</button>
+          <button type="submit" disabled={creating} aria-busy={creating}>
+            {creating ? 'Creating…' : 'Create'}
+          </button>
         </form>
         {error && <p className="error">{error}</p>}
       </section>
 
       <section>
         <h2>Your activities</h2>
-        {activities.length === 0 ? (
+        {activities === null ? (
+          !error && <Skeleton heights={[64, 64]} label="Loading your activities" />
+        ) : activities.length === 0 ? (
           <p className="empty">No upcoming activities yet.</p>
         ) : (
           <ul className="list">

@@ -69,6 +69,7 @@ cd velio_server && npm test && npm run test:e2e   # 10 unit + 62 against a throw
 cd velio_web && npm test                          # 13
 cd velio_flutter && flutter test                  # 31 (one hits the live API; skips if it's down)
 cd velio_server && ./scripts/race-demo.sh         # live oversell race: 20 guests, 1 last spot
+cd velio_server && node scripts/load-test.mjs     # 100 hosts, 200 bookers, 700 guests through the API; real data stays in the DB
 ```
 
 Defaults suit the npm dev setup; `docker-compose.yml` sets the container values (e.g. `DATABASE_URL` points at the `postgres` service).
@@ -175,6 +176,7 @@ There are no application locks and no Redis counters. The database decides.
 | Flutter: 3 files with `http` | **The team's preferred mobile architecture** (view → view model → repository → Dio client), plus a paste-a-code home screen, a **My activities** tab (`GET /users/me/activities`), a top flashbar for used invites, and a `--dart-define=INVITE` launch shortcut | Team house style; the scope says guests arrive "by link **or code**" |
 | Dashboard: HTML only | + JSON, a **count-drift** check, and `queries/metrics.sql` | Scriptable, and catches bookkeeping bugs the oversell check can't |
 | Not planned | `scripts/race-demo.sh` | Shows zero oversell live |
+| Not planned | `scripts/load-test.mjs` (1,000 users through the real API) | Real volume in the database and dashboard; checks integrity under concurrency |
 | Docker only for Postgres + Redis; API and web run with npm | **`docker compose up -d --build` runs the whole stack** (npm kept for hot reload) | One command to start everything for reviewers and demos |
 
 Nothing in the cut was dropped. All 14 planned tasks shipped.

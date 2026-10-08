@@ -129,6 +129,7 @@ flutter run -d "iPhone 17 Pro"            # first build takes a few minutes (pod
 ```bash
 cd velio_server && ./scripts/race-demo.sh            # 20 guests hit the last spot at once
 GUESTS=50 ./scripts/race-demo.sh
+node scripts/load-test.mjs                          # optional: 1,000 users end to end (~6 s), prints latency + integrity
 ```
 ✅ `Winners: 1   race_lost: 19   spots left: 0` and "✅ No oversell". Open the dashboard: **Oversold activities 0, count drift 0**.
 

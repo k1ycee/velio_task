@@ -90,7 +90,7 @@ All of these are on `GET /dashboard` (HTML) and `GET /dashboard/metrics` (JSON).
 | Vouch link disabled (web) | — | The plan page says why "Create vouch link" is unavailable (no held spots, hold ended, every held spot already vouched) | It was silently greyed out for a plan booked with +0 friends |
 | Dashboard | HTML + `POST /settings` | + `GET /dashboard/metrics` (JSON) and the count-drift check; database test files run **one at a time** | JSON for scripting; drift catches count bugs the oversell check can't; serial runs allow exact metric assertions |
 | Queries | Inside the dashboard code only | + `velio_server/queries/metrics.sql` (same definitions, runnable in `psql`, optional `since` filter) | Reviewers can run the queries directly; checked to match `/dashboard/metrics` exactly |
-| Demo tooling | — | `velio_server/scripts/race-demo.sh` (N guests race for the last spot); Flutter `--dart-define=INVITE=<link or token>` opens an invite on launch | Shows zero oversell live; skips the iOS "Open in Velio?" prompt during demos |
+| Demo tooling | — | `velio_server/scripts/race-demo.sh` (N guests race for the last spot); `scripts/load-test.mjs` (1,000 users end to end through the API); Flutter `--dart-define=INVITE=<link or token>` opens an invite on launch | Shows zero oversell live; skips the iOS "Open in Velio?" prompt during demos |
 | Plan file | `Plans.MD` | **`PLANS.md`** | Matches the name the exercise brief uses |
 | Running the stack | Docker for Postgres + Redis; server and web via npm | **`docker compose up -d --build` runs everything**: `velio_server/Dockerfile` (two-stage build, migrations run on start) and `velio_web/Dockerfile` (Vite build served by nginx); health checks hold the server until Postgres and Redis are ready. npm is still available for hot reload | One command to start the whole app for reviewers and demos |
 
@@ -310,6 +310,7 @@ The fallback cut order (dashboard settings form → plan-page polish → Flutter
 | Browser | Headless Chrome via `playwright-core` (the Claude in Chrome extension wasn't connected): every web flow in Tasks 9–11, light and dark dashboard screenshots |
 | iOS simulator (iPhone 16 Pro) | ✅ The vouch invite opened ("Booky vouched for you"); the count went from 3 to 1 live when someone booked through the API; `velio://` links trigger the system "Open in Velio?" prompt as expected |
 | Race demo | `scripts/race-demo.sh`: 20 guests → 1 winner / 19 `race_lost`; 50 guests → 1 / 49 |
+| Load test (2026-10-08) | `scripts/load-test.mjs`, 100 hosts / 200 bookers / 700 guests, 50 in flight, Docker stack on a laptop: 8,072 requests in 5.9 s (~1,360 req/s); p95 bookings 531 ms, claims 139 ms, live delivery 865 ms; 198 plans, 420 claims (108 vouch, 312 public), 223 public `race_lost` once 40 of 100 activities sold out; **0 oversold, 0 count drift**, and the Postgres row counts match the script's |
 | **Not yet verified** | The Flutter UI on a physical device (the wireless iPad needs signing); tapping the claim form on the simulator (covered by widget tests and the live-API test instead) |
 
 ---

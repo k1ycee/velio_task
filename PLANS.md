@@ -87,6 +87,7 @@ All of these are on `GET /dashboard` (HTML) and `GET /dashboard/metrics` (JSON).
 | Queries | Inside the dashboard code only | + `velio_server/queries/metrics.sql` (same definitions, runnable in `psql`, optional `since` filter) | Reviewers can run the queries directly; checked to match `/dashboard/metrics` exactly |
 | Demo tooling | — | `velio_server/scripts/race-demo.sh` (N guests race for the last spot); Flutter `--dart-define=INVITE=<link or token>` opens an invite on launch | Shows zero oversell live; skips the iOS "Open in Velio?" prompt during demos |
 | Plan file | `Plans.MD` | **`PLANS.md`** | Matches the name the exercise brief uses |
+| Running the stack | Docker for Postgres + Redis; server and web via npm | **`docker compose up -d --build` runs everything**: `velio_server/Dockerfile` (two-stage build, migrations run on start) and `velio_web/Dockerfile` (Vite build served by nginx); health checks hold the server until Postgres and Redis are ready. npm is still available for hot reload | One command to start the whole app for reviewers and demos |
 
 ---
 
@@ -294,6 +295,7 @@ The fallback cut order (dashboard settings form → plan-page polish → Flutter
 | `velio_web`: `npm test` · `npm run build` · `npm run lint` | 9 passing; clean |
 | `velio_flutter`: `flutter analyze` · `flutter test` | No issues; 18 passing, including the real-server test |
 | Platform builds | `flutter build macos --debug` ✅ · `flutter build ios --debug --no-codesign` ✅ |
+| Docker stack | `docker compose up -d --build`: all four services healthy; a fresh database is migrated on start; the race demo and the headless-Chrome flow pass against the containers |
 | Real server smoke test | `curl -N` stream showed the snapshot and then the post-commit update |
 | Browser | Headless Chrome via `playwright-core` (the Claude in Chrome extension wasn't connected): every web flow in Tasks 9–11, light and dark dashboard screenshots |
 | iOS simulator (iPhone 16 Pro) | ✅ The vouch invite opened ("Booky vouched for you"); the count went from 3 to 1 live when someone booked through the API; `velio://` links trigger the system "Open in Velio?" prompt as expected |
@@ -326,10 +328,9 @@ In priority order. Expand each into a step-level plan before starting.
 ## Running locally
 
 ```bash
-docker compose up -d                                                     # Postgres 16 + Redis 7
-cd velio_server && npm install && npm run migrate && npm run start:dev   # API on :3000
-cd velio_web && npm install && npm run dev                               # host + booker app on :5173
+docker compose up -d --build                                             # Postgres, Redis, API :3000 (migrates on start), web :5173
 cd velio_flutter && flutter run                                          # guest app (simulator: localhost works)
+#   hot-reload dev instead: docker compose up -d postgres redis, then npm run start:dev / npm run dev
 #   physical device:  flutter run --dart-define=API_URL=http://<your-lan-ip>:3000
 #   Android emulator: flutter run --dart-define=API_URL=http://10.0.2.2:3000
 ```

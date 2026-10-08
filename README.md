@@ -18,27 +18,29 @@ A host creates an **Activity** with limited spots. A **booker** books their own 
 
 ## 1. Quick start
 
-**Prerequisites:** Docker Desktop · Node 24 · Flutter 3.44 with Xcode (iOS simulator) or Android Studio · `jq` (only for the demo scripts).
+**Prerequisites:** Docker Desktop · Flutter 3.44 with Xcode (iOS simulator) or Android Studio · `jq` (only for the demo scripts). Node 24 is only needed to run the tests or the hot-reload dev setup.
 
 ```bash
-# 1. Database + cache
-docker compose up -d                       # Postgres :5432 (velio/velio), Redis :6379
+# 1–3. Database, cache, backend and web — one command
+docker compose up -d --build
+#   postgres :5432 (velio/velio) · redis :6379
+#   server   http://localhost:3000   (runs pending migrations on start; dashboard at /dashboard)
+#   web      http://localhost:5173   (host + booker app)
 
-# 2. Backend — terminal 1
-cd velio_server
-npm install
-npm run migrate                            # applies migrations/*.sql once each
-npm run start:dev                          # http://localhost:3000
-
-# 3. Web (host + booker) — terminal 2
-cd velio_web
-npm install
-npm run dev                                # http://localhost:5173
-
-# 4. Mobile (guest) — terminal 3
+# 4. Mobile (guest)
 cd velio_flutter
 flutter pub get
 flutter run                                # pick the iOS simulator; localhost works there
+```
+
+Rebuild after code changes with `docker compose up -d --build`. Logs: `docker compose logs -f server`. Stop: `docker compose down` (add `-v` to wipe the database).
+
+**Hot-reload development (optional).** Start only the data stores, then run the apps with npm. Don't run both setups at once, because they use the same ports.
+
+```bash
+docker compose up -d postgres redis
+cd velio_server && npm install && npm run migrate && npm run start:dev   # :3000, restarts on save
+cd velio_web && npm install && npm run dev                               # :5173, hot reload
 ```
 
 | Running on | Command |
@@ -64,7 +66,7 @@ cd velio_server && ./scripts/race-demo.sh         # live oversell race: 20 guest
 | `DATABASE_URL` | `postgres://velio:velio@localhost:5432/velio` | server |
 | `REDIS_URL` | `redis://localhost:6379` | server |
 | `PORT` | `3000` | server |
-| `VITE_API_URL` | `http://localhost:3000` | web |
+| `VITE_API_URL` | `http://localhost:3000` | web (baked in at build time; in Docker it's the `web` build arg in `docker-compose.yml`) |
 | `API_URL` / `INVITE` (`--dart-define`) | `http://localhost:3000` / — | Flutter |
 
 ---

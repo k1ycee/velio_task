@@ -1,0 +1,14 @@
+# Build: the API URL is baked in at build time — it's where the *browser* reaches the API.
+FROM node:24-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+ARG VITE_API_URL=http://localhost:3000
+ENV VITE_API_URL=$VITE_API_URL
+RUN npm run build
+
+# Serve: static files only. Routing is hash-based (#/host, #/plan/1), so no SPA fallback is needed.
+FROM nginx:1.27-alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80

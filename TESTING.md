@@ -8,16 +8,15 @@ Each step says **what to do** and **what you should see**. If you don't see it, 
 
 ## 0. Set up (before the audience arrives, ~5 min)
 
-**Prerequisites:** Docker Desktop, Node 24, Flutter 3.44 + Xcode (for the iOS simulator), `jq`.
+**Prerequisites:** Docker Desktop, Flutter 3.44 + Xcode (for the iOS simulator), `jq`. Node 24 only for section 10.
 
 ```bash
-# Fresh, empty database (skip `down -v` to keep existing data)
-docker compose down -v && docker compose up -d
+# Fresh, empty database + API (:3000) + web (:5173). Skip `down -v` to keep existing data.
+docker compose down -v && docker compose up -d --build
+docker compose ps                         # all four services "running"
 
-cd velio_server && npm install && npm run migrate && npm run start:dev   # terminal 1 — API on :3000
-cd velio_web && npm install && npm run dev                               # terminal 2 — web on :5173
-open -a Simulator                                                        # boot an iPhone simulator
-cd velio_flutter && flutter run                                          # terminal 3 — guest app
+open -a Simulator                         # boot an iPhone simulator
+cd velio_flutter && flutter run           # guest app
 ```
 
 **Windows to arrange on screen:**
@@ -153,11 +152,12 @@ cd velio_flutter && flutter test                     # 18 (one runs against the 
 
 | Symptom | Fix |
 | --- | --- |
-| API won't start: `ECONNREFUSED` (Redis/Postgres) | `docker compose up -d` first — the server needs both. |
+| API or web not responding | `docker compose ps` should show four running services; check `docker compose logs server`. Rebuild after code changes: `docker compose up -d --build`. |
+| `port is already allocated` | A dev server (`npm run start:dev` / `npm run dev`) is still running on :3000 / :5173. Stop it. |
 | Web shows "Request failed" | API not running on :3000, or set `VITE_API_URL`. |
 | Window B shows the same user as A | Use a private window or a different browser for B. |
 | Simulator shows a stuck "Open in Velio?" dialog | Tap **Open**; if it persists, restart the simulator (`xcrun simctl shutdown all`). |
 | Phone app can't reach the API on a **physical** device | `flutter run --dart-define=API_URL=http://<your-mac-lan-ip>:3000` |
 | Android emulator | `--dart-define=API_URL=http://10.0.2.2:3000` |
 | Counts look stale after the laptop slept | They resync automatically on reconnect / tab focus; a refresh also works. |
-| Start over with clean data | `docker compose down -v && docker compose up -d && (cd velio_server && npm run migrate)` |
+| Start over with clean data | `docker compose down -v && docker compose up -d --build` (the server migrates on start) |

@@ -34,11 +34,17 @@ export function requireId(value: string): string {
   return value;
 }
 
+/** The Postgres error code (e.g. '23505'), whether the driver error arrives bare or wrapped by Drizzle. */
+export function pgCode(err: unknown): string | undefined {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code ?? e?.cause?.code;
+}
+
 /** Maps Postgres constraint errors to 4xx instead of 500. */
 @Catch()
 export class PgErrorFilter extends BaseExceptionFilter {
   catch(err: unknown, host: ArgumentsHost) {
-    const code = (err as { code?: string })?.code;
+    const code = pgCode(err);
     if (code === '23503') {
       return super.catch(new BadRequestException('referenced user or record does not exist'), host);
     }

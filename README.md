@@ -4,12 +4,12 @@ A host creates an **Activity** with limited spots. A **booker** books their own 
 
 | Folder | What | Stack |
 | --- | --- | --- |
-| `velio_server/` | API, live updates, hold-expiry job, metrics dashboard | NestJS 12 (ESM) · Postgres 16 · Redis 7 |
+| `velio_server/` | API, live updates, hold-expiry job, metrics dashboard | NestJS 12 (ESM) · Drizzle ORM · Postgres 16 · Redis 7 |
 | `velio_web/` | Host + booker app | React 19 + Vite |
 | `velio_flutter/` | Invited-guest app | Flutter 3.44 · Riverpod · Dio |
 | `docker-compose.yml` | Runs Postgres, Redis, the API and the web app together | Docker Compose |
 
-**Status:** all 14 planned tasks are built. 116 automated tests pass (server 10 unit + 62 database, web 13, Flutter 31), and the flows were also run in headless Chrome, on an iOS simulator, and against the Docker stack.
+**Status:** all 14 planned tasks are built. 123 automated tests pass (server 10 unit + 69 database, web 13, Flutter 31), and the flows were also run in headless Chrome, on an iOS simulator, and against the Docker stack.
 
 **More docs:**
 - [`PLANS.md`](PLANS.md): the plan and what was built.
@@ -65,7 +65,7 @@ cd velio_web && npm install && npm run dev                               # :5173
 **Tests:**
 
 ```bash
-cd velio_server && npm test && npm run test:e2e   # 10 unit + 62 against a throwaway velio_test DB (needs Postgres up)
+cd velio_server && npm test && npm run test:e2e   # 10 unit + 69 against a throwaway velio_test DB (needs Postgres up)
 cd velio_web && npm test                          # 13
 cd velio_flutter && flutter test                  # 31 (one hits the live API; skips if it's down)
 cd velio_server && ./scripts/race-demo.sh         # live oversell race: 20 guests, 1 last spot
@@ -168,6 +168,7 @@ There are no application locks and no Redis counters. The database decides.
 | Planned | Built | Why |
 | --- | --- | --- |
 | Fastify | **NestJS 12 (ESM)** | Chosen at kickoff |
+| Raw SQL via `pg` | **Drizzle ORM**: typed schema and queries; locking and the conditional decrement stay in the typed builder; a drift test keeps `schema.ts` in step with the SQL migrations | Typed queries instead of SQL strings |
 | One SSE stream per activity | **+ an all-activities stream** | Browsers allow only 6 connections per host on HTTP/1.1; list pages need one connection |
 | Snapshot, then updates | **Subscribe, then snapshot** | Closes a gap where a commit could be missed |
 | Claim failure `sold_out` | **`race_lost` everywhere**, plus `duplicate` and `no_held_spot` | One reason for "no spot at commit" keeps the 99.5% calculation clean |
@@ -190,7 +191,7 @@ Nothing in the cut was dropped. All 14 planned tasks shipped.
 1. **Correct counts first.** Zero oversell is the one target that can't be fixed after launch, so the transactional core and its concurrency tests came before any UI.
 2. **Measurability second.** Every target has an event and a query, so the product targets can be argued with data rather than guesses.
 3. **Product breadth third:** the whole loop (host → booker → vouch/public → guest claim → live counts) end to end, over polishing any one screen.
-4. **Tests before code throughout:** 116 automated tests in total, plus headless-browser and iOS-simulator runs.
+4. **Tests before code throughout:** 123 automated tests in total, plus headless-browser and iOS-simulator runs.
 
 ### Shortcuts taken (on purpose)
 

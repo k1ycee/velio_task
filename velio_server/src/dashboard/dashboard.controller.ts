@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Header, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { DbService } from '../db/db.service.js';
+import { settings } from '../db/schema.js';
 import { readSetting } from '../settings.js';
 import { computeMetrics, type Metrics } from './metrics.js';
 
@@ -13,24 +14,24 @@ export class DashboardController {
   @Get('dashboard')
   @Header('Content-Type', 'text/html; charset=utf-8')
   async dashboard() {
-    const [m, cap] = await Promise.all([computeMetrics(this.db.pool), readSetting<number>(this.db.pool, 'new_user_cap')]);
+    const [m, cap] = await Promise.all([computeMetrics(this.db.orm), readSetting<number>(this.db.orm, 'new_user_cap')]);
     return renderDashboard(m, cap);
   }
 
   @Get('dashboard/metrics')
   metrics() {
-    return computeMetrics(this.db.pool);
+    return computeMetrics(this.db.orm);
   }
 
   @Post('settings')
   async settings(@Body() body: Record<string, unknown>, @Res() res: Response) {
     const raw = String(body?.new_user_cap ?? '');
     if (!/^\d+$/.test(raw) || Number(raw) > 50) throw new BadRequestException('new_user_cap must be a whole number 0–50');
-    await this.db.pool.query(
-      `INSERT INTO settings (key, value) VALUES ('new_user_cap', $1)
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-      [JSON.stringify(Number(raw))],
-    );
+    const value = Number(raw);
+    await this.db.orm
+      .insert(settings)
+      .values({ key: 'new_user_cap', value })
+      .onConflictDoUpdate({ target: settings.key, set: { value } });
     res.redirect(303, '/dashboard');
   }
 }

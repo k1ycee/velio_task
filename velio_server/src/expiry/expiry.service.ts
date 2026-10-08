@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
+import { and, eq, gt, inArray, lt, lte, sql } from 'drizzle-orm';
 import { DbService } from '../db/db.service.js';
+import { activities, plans, spots } from '../db/schema.js';
 import { LiveService } from '../live/live.service.js';
 import { track } from '../track/track.js';
 
@@ -30,42 +32,44 @@ export class ExpiryService {
    * Returns the ids of activities whose counts changed.
    */
   async releaseExpiredHolds(now = new Date()): Promise<string[]> {
-    const released = await this.db.tx(async (c) => {
-      const { rows } = await c.query<{ plan_id: string; activity_id: string; booker_id: string; n: number }>(
-        `WITH released AS (
-           UPDATE spots s SET status = 'released'
-           FROM plans p
-           WHERE s.plan_id = p.id AND s.status = 'held' AND p.hold_expires_at <= $1
-           RETURNING s.plan_id, s.activity_id, p.booker_id
-         )
-         SELECT plan_id, activity_id, booker_id, count(*)::int AS n
-         FROM released GROUP BY plan_id, activity_id, booker_id`,
-        [now],
-      );
+    const released = await this.db.tx(async (tx) => {
+      const rows = await tx
+        .update(spots)
+        .set({ status: 'released' })
+        .from(plans)
+        .where(and(eq(spots.planId, plans.id), eq(spots.status, 'held'), lte(plans.holdExpiresAt, now)))
+        .returning({ planId: spots.planId, activityId: spots.activityId, bookerId: plans.bookerId });
 
+      // One hold_released event per plan, and one count change per activity.
+      const perPlan = new Map<string, { activityId: string; bookerId: string; n: number }>();
       const perActivity = new Map<string, number>();
       for (const r of rows) {
-        perActivity.set(r.activity_id, (perActivity.get(r.activity_id) ?? 0) + r.n);
-        await track(c, 'hold_released', { userId: r.booker_id, activityId: r.activity_id, planId: r.plan_id }, {
-          spotsReleased: r.n,
+        const plan = perPlan.get(r.planId) ?? { activityId: r.activityId, bookerId: r.bookerId, n: 0 };
+        plan.n++;
+        perPlan.set(r.planId, plan);
+        perActivity.set(r.activityId, (perActivity.get(r.activityId) ?? 0) + 1);
+      }
+      for (const [planId, p] of perPlan) {
+        await track(tx, 'hold_released', { userId: p.bookerId, activityId: p.activityId, planId }, {
+          spotsReleased: p.n,
         });
       }
       // Fixed lock order, so two overlapping runs can't deadlock on activity rows.
       for (const [activityId, n] of [...perActivity].sort(([a], [b]) => Number(a) - Number(b))) {
-        await c.query(`UPDATE activities SET spots_left = spots_left + $2, version = version + 1 WHERE id = $1`, [
-          activityId,
-          n,
-        ]);
+        await tx
+          .update(activities)
+          .set({ spotsLeft: sql`${activities.spotsLeft} + ${n}`, version: sql`${activities.version} + 1` })
+          .where(eq(activities.id, activityId));
       }
       return [...perActivity.keys()];
     });
 
     if (released.length) {
-      const { rows } = await this.db.pool.query<{ id: string; spots_left: number; version: string }>(
-        `SELECT id, spots_left, version FROM activities WHERE id = ANY($1::bigint[])`,
-        [released],
-      );
-      await Promise.all(rows.map((r) => this.live.publish(r.id, r.spots_left, Number(r.version))));
+      const rows = await this.db.orm
+        .select({ id: activities.id, spotsLeft: activities.spotsLeft, version: activities.version })
+        .from(activities)
+        .where(inArray(activities.id, released));
+      await Promise.all(rows.map((r) => this.live.publish(r.id, r.spotsLeft, r.version)));
     }
     return released;
   }
@@ -75,25 +79,26 @@ export class ExpiryService {
    * ponytail: tracked as an event + shown in the booker UI; no email is sent yet (PLANS.md, Stubbed).
    */
   async sendHoldWarnings(now = new Date()) {
-    await this.db.tx(async (c) => {
-      const { rows } = await c.query<{ id: string; activity_id: string; booker_id: string; pct: number; held: number }>(
-        `WITH due AS (
-           SELECT p.id,
-                  CASE WHEN $1 >= p.created_at + (p.hold_expires_at - p.created_at) * 0.9 THEN 90
-                       WHEN $1 >= p.created_at + (p.hold_expires_at - p.created_at) * 0.5 THEN 50
-                       ELSE 0 END AS pct,
-                  (SELECT count(*)::int FROM spots s WHERE s.plan_id = p.id AND s.status = 'held') AS held
-           FROM plans p
-           WHERE p.hold_expires_at > $1 AND p.warned_pct < 90
-         )
-         UPDATE plans p SET warned_pct = due.pct
-         FROM due
-         WHERE p.id = due.id AND due.held > 0 AND due.pct > p.warned_pct
-         RETURNING p.id, p.activity_id, p.booker_id, due.pct, due.held`,
-        [now],
-      );
+    // How far through its hold window a plan is, as the warning level it has reached: 0, 50 or 90.
+    const reached = (share: number) =>
+      sql`${plans.createdAt} + (${plans.holdExpiresAt} - ${plans.createdAt}) * ${share}`;
+    const pct = sql<number>`CASE WHEN ${now} >= ${reached(0.9)} THEN 90
+                                 WHEN ${now} >= ${reached(0.5)} THEN 50 ELSE 0 END`;
+
+    await this.db.tx(async (tx) => {
+      // A nested builder, not a sql`` string: Drizzle drops table names from columns in a RETURNING
+      // list, which would turn a hand-written correlated subquery into spots.plan_id = spots.id.
+      const held = sql<number>`(${tx
+        .select({ n: sql`count(*)::int` })
+        .from(spots)
+        .where(and(eq(spots.planId, plans.id), eq(spots.status, 'held')))})`;
+      const rows = await tx
+        .update(plans)
+        .set({ warnedPct: pct })
+        .where(and(gt(plans.holdExpiresAt, now), lt(plans.warnedPct, pct), gt(held, 0)))
+        .returning({ id: plans.id, activityId: plans.activityId, bookerId: plans.bookerId, pct: plans.warnedPct, held });
       for (const r of rows) {
-        await track(c, 'hold_warning_sent', { userId: r.booker_id, activityId: r.activity_id, planId: r.id }, {
+        await track(tx, 'hold_warning_sent', { userId: r.bookerId, activityId: r.activityId, planId: r.id }, {
           pct: r.pct,
           heldSpotsLeft: r.held,
         });

@@ -57,7 +57,7 @@ describe('computeMetrics', () => {
     // The activity has now happened: plan A had guests, plan B didn't.
     await db.pool.query(`UPDATE activities SET starts_at = now() - interval '1 hour' WHERE id = $1`, [activityId]);
 
-    const m = await computeMetrics(db.pool, since);
+    const m = await computeMetrics(db.orm, since);
     expect(m).toMatchObject({
       oversoldActivities: 0,
       countDrift: 0,

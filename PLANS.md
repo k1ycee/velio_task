@@ -7,7 +7,7 @@
 **Architecture:** One NestJS server is the only writer to Postgres, and every change to a spot count runs in a single transaction. After the commit, the server publishes the new count to Redis. Every server instance relays it to its clients over Server-Sent Events. React serves hosts and bookers; Flutter serves invited guests. Events are written to Postgres in the same transaction as the change they describe, and a dashboard page rendered by the server reads them.
 
 **Tech Stack:**
-- **Server:** Node 24, NestJS 12 (ESM), `pg`, `ioredis`, `@nestjs/schedule`, Vitest + Supertest.
+- **Server:** Node 24, NestJS 12 (ESM), Drizzle ORM over `pg`, `ioredis`, `@nestjs/schedule`, Vitest + Supertest.
 - **Infrastructure:** Postgres 16 and Redis 7 via Docker Compose.
 - **Web:** React 19 + Vite 8, Vitest.
 - **Mobile:** Flutter 3.44 with `hooks_riverpod`, `flutter_hooks`, `dio`, `fpdart`, `app_links`, `shared_preferences`.
@@ -17,7 +17,7 @@
 **Companion docs:** [`README.md`](README.md) (run it, architecture, trade-offs, tracking) · [`TESTING.md`](TESTING.md) (demo script) · [`OWNERSHIP.md`](OWNERSHIP.md) (invite-funnel diagnosis and improvements).
 
 **Status (2026-10-08): all 14 tasks done**, plus post-build changes (vouch-link explanation on the web, used-vouch flashbar and a "My activities" tab on mobile, loading states on both, one design language). Every suite is green:
-- server: 10 unit tests + 62 database (e2e) tests
+- server: 10 unit tests + 69 database (e2e) tests
 - web: 13 tests
 - Flutter: 31 tests
 
@@ -91,6 +91,7 @@ All of these are on `GET /dashboard` (HTML) and `GET /dashboard/metrics` (JSON).
 | Dashboard | HTML + `POST /settings` | + `GET /dashboard/metrics` (JSON) and the count-drift check; database test files run **one at a time** | JSON for scripting; drift catches count bugs the oversell check can't; serial runs allow exact metric assertions |
 | Queries | Inside the dashboard code only | + `velio_server/queries/metrics.sql` (same definitions, runnable in `psql`, optional `since` filter) | Reviewers can run the queries directly; checked to match `/dashboard/metrics` exactly |
 | Demo tooling | — | `velio_server/scripts/race-demo.sh` (N guests race for the last spot); `scripts/load-test.mjs` (1,000 users end to end through the API); Flutter `--dart-define=INVITE=<link or token>` opens an invite on launch | Shows zero oversell live; skips the iOS "Open in Velio?" prompt during demos |
+| Data access | Raw SQL through `pg` | **Drizzle ORM** (2026-10-08). Typed schema in `src/db/schema.ts`; every query goes through the typed builder, including the conditional decrement (`gte(spotsLeft, n)`), `FOR UPDATE` / `SKIP LOCKED` (`.for('update', { skipLocked: true })`) and `ON CONFLICT`. Metrics keep Postgres `FILTER` / `percentile_cont` as `sql` fragments over typed columns. SQL migrations stay the source of truth for CHECKs and partial unique indexes, and `schema-drift.e2e-spec.ts` fails if a column disagrees. **Gotcha:** Drizzle drops table names from columns in SELECT/RETURNING lists, so correlated subqueries there must be nested builders, not hand-written `sql` strings (the tests caught two) | Your call: typed queries instead of SQL strings. Re-ran the 1,000-user load test: ~1,390 req/s, 0 oversold, 0 drift |
 | Plan file | `Plans.MD` | **`PLANS.md`** | Matches the name the exercise brief uses |
 | Running the stack | Docker for Postgres + Redis; server and web via npm | **`docker compose up -d --build` runs everything**: `velio_server/Dockerfile` (two-stage build, migrations run on start) and `velio_web/Dockerfile` (Vite build served by nginx); health checks hold the server until Postgres and Redis are ready. npm is still available for hot reload | One command to start the whole app for reviewers and demos |
 
@@ -132,7 +133,8 @@ velio_project/
 │   ├── src/
 │   │   ├── main.ts                        bootstrap + CORS
 │   │   ├── app.module.ts                  wires every controller/service, ScheduleModule, PgErrorFilter
-│   │   ├── db/{db.module,db.service,migrate}.ts   pool, tx(fn), migration runner (npm run migrate)
+│   │   ├── db/{db.module,db.service,migrate}.ts   Drizzle client (orm), tx(fn), migration runner (npm run migrate)
+│   │   ├── db/schema.ts                    Drizzle tables mirroring migrations/*.sql (drift test keeps them in step)
 │   │   ├── common/http.ts                 @UserId(), requireString/Int/Id, PgErrorFilter (23503→400, 23505→409)
 │   │   ├── track/track.ts                 track(client, name, ids, props)
 │   │   ├── settings.ts                    readSetting<T>(client, key)

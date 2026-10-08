@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { DbService } from '../src/db/db.service.js';
+import { activities } from '../src/db/schema.js';
 
 const db = new DbService();
 
@@ -53,8 +55,8 @@ describe('schema', () => {
   it('tx() rolls back everything when the callback throws', async () => {
     const id = await seedActivity(2);
     await expect(
-      db.tx(async (c) => {
-        await c.query(`UPDATE activities SET spots_left = 1 WHERE id = $1`, [id]);
+      db.tx(async (tx) => {
+        await tx.update(activities).set({ spotsLeft: 1 }).where(eq(activities.id, id));
         throw new Error('boom');
       }),
     ).rejects.toThrow('boom');

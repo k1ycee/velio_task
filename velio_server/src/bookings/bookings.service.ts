@@ -6,7 +6,10 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { and, eq, gt, gte, sql } from 'drizzle-orm';
+import { pgCode } from '../common/http.js';
 import { DbService } from '../db/db.service.js';
+import { activities, plans, spots } from '../db/schema.js';
 import { LiveService } from '../live/live.service.js';
 import { holdExpiresAt } from '../hold-window.js';
 import { readSetting } from '../settings.js';
@@ -30,51 +33,45 @@ export class BookingsService {
   async book(bookerId: string, activityId: string, heldSpots: number) {
     const requested = heldSpots + 1;
     try {
-      const result = await this.db.tx(async (c) => {
+      const result = await this.db.tx(async (tx) => {
         // ponytail: one cap for everyone; fill-rate-based caps are deferred (PLANS.md).
-        const cap = await readSetting<number>(c, 'new_user_cap');
+        const cap = await readSetting<number>(tx, 'new_user_cap');
         if (heldSpots > cap) {
           throw new UnprocessableEntityException({ message: `at most ${cap} held spots`, cap });
         }
 
         // The oversell guard: the conditional decrement only succeeds if enough spots remain.
-        const { rows } = await c.query<{ spots_left: number; version: string; starts_at: Date }>(
-          `UPDATE activities SET spots_left = spots_left - $2, version = version + 1
-           WHERE id = $1 AND spots_left >= $2 AND starts_at > now()
-           RETURNING spots_left, version, starts_at`,
-          [activityId, requested],
-        );
-        if (!rows[0]) {
-          const cur = await c.query<{ spots_left: number; starts_at: Date }>(
-            `SELECT spots_left, starts_at FROM activities WHERE id = $1`,
-            [activityId],
-          );
-          if (!cur.rows[0]) throw new NotFoundException('activity not found');
-          if (cur.rows[0].starts_at <= new Date()) throw new BadRequestException('activity has already started');
-          throw new NotEnoughSpots(cur.rows[0].spots_left, requested);
-        }
-        const activity = rows[0];
-
-        const expiresAt = holdExpiresAt(activity.starts_at, new Date());
-        const plan = await c.query<{ id: string }>(
-          `INSERT INTO plans (activity_id, booker_id, hold_expires_at) VALUES ($1, $2, $3) RETURNING id`,
-          [activityId, bookerId, expiresAt],
-        );
-        const planId = plan.rows[0].id;
-
-        await c.query(
-          `INSERT INTO spots (plan_id, activity_id, status, user_id) VALUES ($1, $2, 'booker', $3)`,
-          [planId, activityId, bookerId],
-        );
-        if (heldSpots > 0) {
-          await c.query(
-            `INSERT INTO spots (plan_id, activity_id, status)
-             SELECT $1, $2, 'held' FROM generate_series(1, $3)`,
-            [planId, activityId, heldSpots],
-          );
+        const [activity] = await tx
+          .update(activities)
+          .set({ spotsLeft: sql`${activities.spotsLeft} - ${requested}`, version: sql`${activities.version} + 1` })
+          .where(
+            and(eq(activities.id, activityId), gte(activities.spotsLeft, requested), gt(activities.startsAt, sql`now()`)),
+          )
+          .returning({ spotsLeft: activities.spotsLeft, version: activities.version, startsAt: activities.startsAt });
+        if (!activity) {
+          const [cur] = await tx
+            .select({ spotsLeft: activities.spotsLeft, startsAt: activities.startsAt })
+            .from(activities)
+            .where(eq(activities.id, activityId));
+          if (!cur) throw new NotFoundException('activity not found');
+          if (cur.startsAt <= new Date()) throw new BadRequestException('activity has already started');
+          throw new NotEnoughSpots(cur.spotsLeft, requested);
         }
 
-        await track(c, 'booking_created', { userId: bookerId, activityId, planId }, {
+        const expiresAt = holdExpiresAt(activity.startsAt, new Date());
+        const [plan] = await tx
+          .insert(plans)
+          .values({ activityId, bookerId, holdExpiresAt: expiresAt })
+          .returning({ id: plans.id });
+        const planId = plan.id;
+
+        // The booker's own spot first, then one held spot per friend.
+        await tx.insert(spots).values([
+          { planId, activityId, status: 'booker', userId: bookerId },
+          ...Array.from({ length: heldSpots }, () => ({ planId, activityId, status: 'held' as const })),
+        ]);
+
+        await track(tx, 'booking_created', { userId: bookerId, activityId, planId }, {
           spotsHeld: heldSpots,
           holdExpiresAt: expiresAt.toISOString(),
         });
@@ -82,24 +79,24 @@ export class BookingsService {
         return {
           planId,
           holdExpiresAt: expiresAt.toISOString(),
-          spotsLeft: activity.spots_left,
-          version: Number(activity.version),
+          spotsLeft: activity.spotsLeft,
+          version: activity.version,
         };
       });
       await this.live.publish(activityId, result.spotsLeft, result.version);
       return result;
     } catch (err) {
       if (err instanceof NotEnoughSpots) {
-        await track(this.db.pool, 'booking_failed', { userId: bookerId, activityId }, {
+        await track(this.db.orm, 'booking_failed', { userId: bookerId, activityId }, {
           reason: 'race_lost',
           requested: err.requested,
           available: err.available,
         });
         throw new ConflictException({ reason: 'race_lost', available: err.available });
       }
-      const isExpected = err instanceof HttpException || (err as { code?: string })?.code === '23505';
+      const isExpected = err instanceof HttpException || pgCode(err) === '23505';
       if (!isExpected) {
-        await track(this.db.pool, 'booking_failed', { userId: bookerId, activityId }, { reason: 'error' }).catch(
+        await track(this.db.orm, 'booking_failed', { userId: bookerId, activityId }, { reason: 'error' }).catch(
           () => undefined,
         );
       }

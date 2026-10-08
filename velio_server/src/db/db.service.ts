@@ -1,28 +1,23 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { DEFAULT_DATABASE_URL } from './migrate.js';
+import * as schema from './schema.js';
 
-// BIGINT ids come back as strings by default; keep them strings (ids can exceed 2^53).
-// INT columns (spots_left, capacity) already parse to numbers.
+export type Db = NodePgDatabase<typeof schema>;
+export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+/** Anything queries can run on: the pool-backed client or an open transaction. */
+export type Executor = Db | Tx;
 
 @Injectable()
 export class DbService implements OnModuleDestroy {
+  /** Raw driver, for migrations and test setup. App code uses [orm]. */
   readonly pool = new pg.Pool({ connectionString: process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL });
+  readonly orm: Db = drizzle(this.pool, { schema });
 
   /** Runs fn inside one transaction: commits on success, rolls back on any throw. */
-  async tx<T>(fn: (client: pg.PoolClient) => Promise<T>): Promise<T> {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      const result = await fn(client);
-      await client.query('COMMIT');
-      return result;
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+  tx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+    return this.orm.transaction(fn);
   }
 
   async onModuleDestroy() {

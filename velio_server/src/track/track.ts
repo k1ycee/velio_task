@@ -1,4 +1,5 @@
-import pg from 'pg';
+import type { Executor } from '../db/db.service.js';
+import { events } from '../db/schema.js';
 
 export interface EventIds {
   userId?: string | null;
@@ -7,20 +8,15 @@ export interface EventIds {
 }
 
 /**
- * Writes one row to `events`. Pass the transaction client so the event commits
+ * Writes one row to `events`. Pass the transaction so the event commits
  * (or rolls back) together with the change it describes.
  */
-export async function track(
-  c: pg.Pool | pg.PoolClient,
-  name: string,
-  ids: EventIds,
-  props: Record<string, unknown> = {},
-) {
-  await c.query(`INSERT INTO events (name, user_id, activity_id, plan_id, props) VALUES ($1, $2, $3, $4, $5)`, [
+export async function track(db: Executor, name: string, ids: EventIds, props: Record<string, unknown> = {}) {
+  await db.insert(events).values({
     name,
-    ids.userId ?? null,
-    ids.activityId ?? null,
-    ids.planId ?? null,
+    userId: ids.userId ?? null,
+    activityId: ids.activityId ?? null,
+    planId: ids.planId ?? null,
     props,
-  ]);
+  });
 }

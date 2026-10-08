@@ -10,7 +10,9 @@ import {
   Sse,
 } from '@nestjs/common';
 import { Observable, interval, map, merge } from 'rxjs';
+import { eq } from 'drizzle-orm';
 import { DbService } from '../db/db.service.js';
+import { activities } from '../db/schema.js';
 import { requireId } from '../common/http.js';
 import { track } from '../track/track.js';
 import { Availability, LiveService } from './live.service.js';
@@ -60,12 +62,12 @@ export class LiveController {
   }
 
   private async snapshot(id: string): Promise<Availability> {
-    const { rows } = await this.db.pool.query<{ spots_left: number; version: string }>(
-      `SELECT spots_left, version FROM activities WHERE id = $1`,
-      [id],
-    );
-    if (!rows[0]) throw new NotFoundException('activity not found');
-    return { activityId: id, spotsLeft: rows[0].spots_left, version: Number(rows[0].version), committedAt: null };
+    const [row] = await this.db.orm
+      .select({ spotsLeft: activities.spotsLeft, version: activities.version })
+      .from(activities)
+      .where(eq(activities.id, id));
+    if (!row) throw new NotFoundException('activity not found');
+    return { activityId: id, ...row, committedAt: null };
   }
 
   /**
@@ -89,7 +91,7 @@ export class LiveController {
 
     const activityId = body.activityId == null ? null : requireId(String(body.activityId));
     await track(
-      this.db.pool,
+      this.db.orm,
       name,
       { userId: userId && /^\d+$/.test(userId) ? userId : null, activityId },
       { latencyMs, version: props.version ?? null },

@@ -1,6 +1,8 @@
 import { BadRequestException, Body, Controller, Get, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
+import { and, asc, desc, eq, inArray, or } from 'drizzle-orm';
 import { DbService } from '../db/db.service.js';
+import { activities, plans, spots, users } from '../db/schema.js';
 import { UserId, requireString } from '../common/http.js';
 import { toActivity } from '../activities/activities.controller.js';
 
@@ -12,30 +14,26 @@ export class UsersController {
 
   /** For the web identity picker. Names only — no contact details. */
   @Get()
-  async list() {
-    const { rows } = await this.db.pool.query(`SELECT id, name FROM users ORDER BY id DESC LIMIT 100`);
-    return rows;
+  list() {
+    return this.db.orm.select({ id: users.id, name: users.name }).from(users).orderBy(desc(users.id)).limit(100);
   }
 
   /** The guest app's "My activities" tab: every activity I hold a spot in, soonest first. */
   @Get('me/activities')
   async myActivities(@UserId() userId: string) {
-    const { rows } = await this.db.pool.query(
-      `SELECT s.status, s.plan_id, b.name AS booker_name,
-              a.id, a.host_id, a.title, a.starts_at, a.capacity, a.spots_left, a.version
-       FROM spots s
-       JOIN activities a ON a.id = s.activity_id
-       JOIN plans p ON p.id = s.plan_id
-       JOIN users b ON b.id = p.booker_id
-       WHERE s.user_id = $1 AND s.status IN ('booker', 'claimed')
-       ORDER BY a.starts_at, a.id`,
-      [userId],
-    );
+    const rows = await this.db.orm
+      .select({ status: spots.status, planId: spots.planId, bookerName: users.name, activity: activities })
+      .from(spots)
+      .innerJoin(activities, eq(activities.id, spots.activityId))
+      .innerJoin(plans, eq(plans.id, spots.planId))
+      .innerJoin(users, eq(users.id, plans.bookerId))
+      .where(and(eq(spots.userId, userId), inArray(spots.status, ['booker', 'claimed'])))
+      .orderBy(asc(activities.startsAt), asc(activities.id));
     return rows.map((r) => ({
-      planId: r.plan_id,
+      planId: r.planId,
       role: r.status === 'booker' ? 'booker' : 'guest',
-      bookerName: r.booker_name,
-      activity: toActivity(r),
+      bookerName: r.bookerName,
+      activity: toActivity(r.activity),
     }));
   }
 
@@ -50,17 +48,20 @@ export class UsersController {
     if (!local || !domain || email.split('@').length !== 2) throw new BadRequestException('invalid email');
     if (local.includes('+')) throw new BadRequestException('email aliases with "+" are not allowed');
 
-    const inserted = await this.db.pool.query<{ id: string }>(
-      `INSERT INTO users (name, phone, email) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING id`,
-      [name, phone, email],
-    );
-    if (inserted.rows[0]) return { id: inserted.rows[0].id };
+    const [inserted] = await this.db.orm
+      .insert(users)
+      .values({ name, phone, email })
+      .onConflictDoNothing()
+      .returning({ id: users.id });
+    if (inserted) return inserted;
 
-    const existing = await this.db.pool.query<{ id: string }>(
-      `SELECT id FROM users WHERE phone = $1 OR email = $2 ORDER BY id LIMIT 1`,
-      [phone, email],
-    );
+    const [existing] = await this.db.orm
+      .select({ id: users.id })
+      .from(users)
+      .where(or(eq(users.phone, phone), eq(users.email, email)))
+      .orderBy(asc(users.id))
+      .limit(1);
     res.status(200);
-    return { id: existing.rows[0].id };
+    return existing;
   }
 }

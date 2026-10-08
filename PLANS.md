@@ -14,6 +14,8 @@
 
 **Spec:** `grill-me-sessions/velioapp.grill.md` (decisions and risks) · `Questions.MD` (27-question Q&A log, kept locally and excluded from git).
 
+**Companion docs:** [`README.md`](README.md) (run it, architecture, trade-offs, tracking) · [`TESTING.md`](TESTING.md) (demo script) · [`OWNERSHIP.md`](OWNERSHIP.md) (invite-funnel diagnosis and improvements).
+
 **Status (2026-10-07): all 14 tasks done** across 13 commits on `main`. Every suite is green:
 - server: 10 unit tests + 60 database (e2e) tests
 - web: 9 tests
@@ -82,6 +84,9 @@ All of these are on `GET /dashboard` (HTML) and `GET /dashboard/metrics` (JSON).
 | Flutter HTTP | `http` | `dio` (Dio delivers `Uint8List` streams, so the SSE parser `cast`s the bytes) | Required by the architecture; regression test in `sse_test.dart` |
 | Flutter extras | — | Home screen for pasting a link or code; `StorageService` remembers the user ID; SSE reconnect after 2s | The scope says guests arrive "through a link **or code**"; returning guests skip identity entry |
 | Dashboard | HTML + `POST /settings` | + `GET /dashboard/metrics` (JSON) and the count-drift check; database test files run **one at a time** | JSON for scripting; drift catches count bugs the oversell check can't; serial runs allow exact metric assertions |
+| Queries | Inside the dashboard code only | + `velio_server/queries/metrics.sql` (same definitions, runnable in `psql`, optional `since` filter) | Reviewers can run the queries directly; checked to match `/dashboard/metrics` exactly |
+| Demo tooling | — | `velio_server/scripts/race-demo.sh` (N guests race for the last spot); Flutter `--dart-define=INVITE=<link or token>` opens an invite on launch | Shows zero oversell live; skips the iOS "Open in Velio?" prompt during demos |
+| Plan file | `Plans.MD` | **`PLANS.md`** | Matches the name the exercise brief uses |
 
 ---
 
@@ -291,7 +296,9 @@ The fallback cut order (dashboard settings form → plan-page polish → Flutter
 | Platform builds | `flutter build macos --debug` ✅ · `flutter build ios --debug --no-codesign` ✅ |
 | Real server smoke test | `curl -N` stream showed the snapshot and then the post-commit update |
 | Browser | Headless Chrome via `playwright-core` (the Claude in Chrome extension wasn't connected): every web flow in Tasks 9–11, light and dark dashboard screenshots |
-| **Not yet verified** | The Flutter UI on a real device or simulator (only a wireless iPad was available, which needs signing); a device opening `velio://` links from another app |
+| iOS simulator (iPhone 16 Pro) | ✅ The vouch invite opened ("Booky vouched for you"); the count went from 3 to 1 live when someone booked through the API; `velio://` links trigger the system "Open in Velio?" prompt as expected |
+| Race demo | `scripts/race-demo.sh`: 20 guests → 1 winner / 19 `race_lost`; 50 guests → 1 / 49 |
+| **Not yet verified** | The Flutter UI on a physical device (the wireless iPad needs signing); tapping the claim form on the simulator (covered by widget tests and the live-API test instead) |
 
 ---
 
@@ -300,7 +307,7 @@ The fallback cut order (dashboard settings form → plan-page polish → Flutter
 1. **Guests without the app — HIGH.** K-factor, the core metric, stays near zero if every guest already has the app. See Next step 1.
 2. **Dashboard has no auth — HIGH if deployed.** Anyone who can reach it can read metrics and change the cap.
 3. **Unverified identity — MEDIUM.** Vouches can be spoofed, and new identities can inflate K-factor and dodge the cap.
-4. **Flutter UI not seen on a device — MEDIUM.** Logic and widgets are tested; layout on real screens isn't.
+4. **Flutter UI on a physical device — LOW.** It renders and updates live on the iOS simulator; only a real-device run is left.
 5. **Assumption to confirm:** the new-user cap of 2 excludes the booker's own seat.
 6. **Short hold windows:** a booking made 30 minutes before the activity gets a 10-minute window, so the 50% warning comes 5 minutes in.
 
@@ -309,7 +316,7 @@ The fallback cut order (dashboard settings form → plan-page polish → Flutter
 In priority order. Expand each into a step-level plan before starting.
 
 - [ ] **Web claim fallback (~4h):** a `velio_web` route `#/invite/:token` using the existing `GET /invites/:token` and claim endpoints, linked from the app-store fallback. Fixes risk 1.
-- [ ] **Run the Flutter app on a device or simulator (~1h):** open a link with `xcrun simctl openurl`, check the layout, claim, background the app for a minute, resume. Fixes risk 4.
+- [x] ~~Run the Flutter app on a simulator~~ (done 2026-10-08). Remaining: one physical-device run with `--dart-define=API_URL=http://<lan-ip>:3000`.
 - [ ] **Dashboard auth (~1h):** a shared-secret header or basic auth on `/dashboard`, `/dashboard/metrics` and `/settings`. Fixes risk 2.
 - [ ] **Confirm the cap assumption** (risk 5); one migration if it changes.
 - [ ] **Cancellations (~6h):** the rules are already decided in the session file.

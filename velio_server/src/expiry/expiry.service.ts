@@ -72,7 +72,7 @@ export class ExpiryService {
 
   /**
    * Records a 50% / 90% warning once per plan that still has held spots to fill.
-   * ponytail: tracked as an event + shown in the booker UI; no email is sent yet (Plans.MD, Stubbed).
+   * ponytail: tracked as an event + shown in the booker UI; no email is sent yet (PLANS.md, Stubbed).
    */
   async sendHoldWarnings(now = new Date()) {
     await this.db.tx(async (c) => {

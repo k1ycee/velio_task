@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import 'core/providers.dart';
+import 'utils/invite_token.dart';
 import 'views/home/home_screen.dart';
+
+/// Demo shortcut: `flutter run --dart-define=INVITE=<token or velio:// link>` opens that invite on launch.
+const _launchInvite = String.fromEnvironment('INVITE');
 
 void main() {
   runApp(const ProviderScope(child: VelioApp()));
@@ -20,7 +24,11 @@ class _VelioAppState extends ConsumerState<VelioApp> {
   void initState() {
     super.initState();
     // Covers both the link that launched the app and links tapped while it runs.
-    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(navigationService).listenForInviteLinks());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final nav = ref.read(navigationService)..listenForInviteLinks();
+      final token = inviteToken(_launchInvite);
+      if (token != null) nav.openInvite(token);
+    });
   }
 
   @override

@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { DbService } from '../db/db.service.js';
 import { requireString } from '../common/http.js';
 
-// ponytail: unverified identity (verification deferred, see Plans.MD). Phone and email are each
+// ponytail: unverified identity (verification deferred, see PLANS.md). Phone and email are each
 // unique on their own, so a match on either returns the existing user.
 @Controller('users')
 export class UsersController {

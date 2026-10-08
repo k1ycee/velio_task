@@ -31,7 +31,7 @@ export class BookingsService {
     const requested = heldSpots + 1;
     try {
       const result = await this.db.tx(async (c) => {
-        // ponytail: one cap for everyone; fill-rate-based caps are deferred (Plans.MD).
+        // ponytail: one cap for everyone; fill-rate-based caps are deferred (PLANS.md).
         const cap = await readSetting<number>(c, 'new_user_cap');
         if (heldSpots > cap) {
           throw new UnprocessableEntityException({ message: `at most ${cap} held spots`, cap });

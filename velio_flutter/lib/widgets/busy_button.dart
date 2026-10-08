@@ -40,7 +40,8 @@ class BusyButton extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2, color: scheme.onPrimary),
                   ),
                   const SizedBox(width: 10),
-                  Text(busyLabel),
+                  // Large accessibility text sizes must shrink the label, not overflow the button.
+                  Flexible(child: Text(busyLabel, overflow: TextOverflow.ellipsis, maxLines: 1)),
                 ],
               )
             : Text(label, key: const ValueKey('idle')),

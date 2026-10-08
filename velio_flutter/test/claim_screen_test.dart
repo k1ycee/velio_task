@@ -13,6 +13,7 @@ import 'fakes.dart';
 
 Future<FakeRepo> pumpClaim(WidgetTester tester, {FakeRepo? repo}) async {
   final fake = repo ?? FakeRepo();
+  usePhoneScreen(tester);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [inviteRepo.overrideWithValue(fake), storageService.overrideWithValue(FakeStorage())],
@@ -38,11 +39,11 @@ void main() {
     final repo = await pumpClaim(tester);
     expect(find.text('Booky vouched for you'), findsOneWidget);
     expect(find.text('Sunset Kayaking'), findsOneWidget);
-    expect(find.text('4 of 10 spots left'), findsOneWidget);
+    expect(find.text('4 of 10 left'), findsOneWidget);
 
     repo.live.add(const Availability(activityId: '11', spotsLeft: 3, version: 2));
     await tester.pumpAndSettle();
-    expect(find.text('3 of 10 spots left'), findsOneWidget);
+    expect(find.text('3 of 10 left'), findsOneWidget);
 
     repo.claimResponse = right(result(spotsLeft: 3, version: 2));
     await fillAndClaim(tester);

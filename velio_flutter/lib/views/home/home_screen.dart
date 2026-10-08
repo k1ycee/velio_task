@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../core/providers.dart';
 import '../../utils/invite_token.dart';
 import '../../widgets/busy_button.dart';
+import '../../widgets/surfaces.dart';
 import 'widget/flash_bar.dart';
 
 /// Shown when the app is opened without an invite link: guests can paste a link or code.
@@ -29,7 +30,6 @@ class HomeScreen extends HookConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Velio')),
       body: SafeArea(
         child: Stack(
           children: [
@@ -37,24 +37,36 @@ class HomeScreen extends HookConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
-                  Text('Got an invite?', style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 8),
-                  const Text('Tap the link a friend sent you, or paste it here.'),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: code,
-                    enabled: !vm.opening,
-                    decoration: InputDecoration(labelText: 'Invite link or code', errorText: error.value),
-                    autocorrect: false,
-                    textInputAction: TextInputAction.go,
-                    onSubmitted: (_) => open(),
+                  const PageHeader(
+                    title: 'Got an invite?',
+                    subtitle: 'Tap the link a friend sent you, or paste it here.',
                   ),
-                  const SizedBox(height: 16),
-                  BusyButton(label: 'Open invite', busyLabel: 'Checking invite…', busy: vm.opening, onPressed: open),
+                  Panel(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: code,
+                          enabled: !vm.opening,
+                          decoration: InputDecoration(labelText: 'Invite link or code', errorText: error.value),
+                          autocorrect: false,
+                          textInputAction: TextInputAction.go,
+                          onSubmitted: (_) => open(),
+                        ),
+                        const SizedBox(height: 12),
+                        BusyButton(
+                          label: 'Open invite',
+                          busyLabel: 'Checking invite…',
+                          busy: vm.opening,
+                          onPressed: open,
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            // The Stack clips, so the flashbar seems to drop from under the app bar.
+            // The Stack clips, so the flashbar seems to drop from the top edge of the screen.
             if (vm.flash != null)
               Positioned(
                 top: 0,

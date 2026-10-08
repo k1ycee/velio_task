@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import 'core/constants/velio_theme.dart';
 import 'core/providers.dart';
 import 'utils/invite_token.dart';
 import 'views/controller/controller_screen.dart';
@@ -35,12 +36,11 @@ class _VelioAppState extends ConsumerState<VelioApp> {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF1F6F5C);
     return MaterialApp(
       title: 'Velio',
       navigatorKey: ref.read(navigationService).navigatorKey,
-      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true),
-      darkTheme: ThemeData(colorSchemeSeed: seed, brightness: Brightness.dark, useMaterial3: true),
+      theme: velioTheme(Brightness.light),
+      darkTheme: velioTheme(Brightness.dark),
       home: const ControllerScreen(),
     );
   }

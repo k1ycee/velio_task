@@ -16,7 +16,7 @@
 
 **Companion docs:** [`README.md`](README.md) (run it, architecture, trade-offs, tracking) · [`TESTING.md`](TESTING.md) (demo script) · [`OWNERSHIP.md`](OWNERSHIP.md) (invite-funnel diagnosis and improvements).
 
-**Status (2026-10-08): all 14 tasks done**, plus post-build changes (vouch-link explanation on the web, used-vouch flashbar and a "My activities" tab on mobile, loading states on both). Every suite is green:
+**Status (2026-10-08): all 14 tasks done**, plus post-build changes (vouch-link explanation on the web, used-vouch flashbar and a "My activities" tab on mobile, loading states on both, one design language). Every suite is green:
 - server: 10 unit tests + 62 database (e2e) tests
 - web: 13 tests
 - Flutter: 31 tests
@@ -85,6 +85,7 @@ All of these are on `GET /dashboard` (HTML) and `GET /dashboard/metrics` (JSON).
 | Flutter HTTP | `http` | `dio` (Dio delivers `Uint8List` streams, so the SSE parser `cast`s the bytes) | Required by the architecture; regression test in `sse_test.dart` |
 | Flutter extras | — | Home screen for pasting a link or code; `StorageService` remembers the user ID; SSE reconnect after 2s | The scope says guests arrive "through a link **or code**"; returning guests skip identity entry |
 | Invalid-invite errors (mobile) | Shown on the claim screen | **Checked on the "Got an invite?" page first** (`InviteEntryVM`). A used vouch link or unknown invite shows a **flashbar that drops in from the top, stays 2 seconds and slides back up** (no tap needed), and the claim page never opens. A vouch used up while the guest fills the form sends them back there with the same flashbar. Pasted codes, tapped links and the launch link all go through this check | Your call (2026-10-08): the claim page is only for claiming and its confirmation. The invite is fetched once and handed to the claim page, so `invite_opened` still counts once |
+| Design language (web + mobile) | Material defaults on mobile (seeded palette, app bars, chips) | **One design language, with the web as the reference.** `velio_theme.dart` mirrors the CSS tokens (light and dark) and builds the Material theme: flat bordered cards (12px), 8px controls, semibold buttons, outlined inputs, the uppercase VOUCH badge, "N of M left" with amber/red tones, warm notices, the short date format (`formatWhen`) and an active-pill tab bar. **No app bars**: each screen starts with a page header (title, plus "← Back" on the claim page) like the web's `h1` | Your call (2026-10-08): both apps should feel like one product |
 | Loading states (web + mobile) | Text ("Loading…") or a bare spinner | **Skeletons shaped like the content** for first loads (web lists and plan page; mobile "My activities"). They stay invisible for 150ms so fast loads don't flash, pulse gently, and stay still under reduced motion. **Every action button has a working state**: it keeps its colour, shows a spinner and says what's happening ("Booking…", "Creating link…", "Checking invite…", "Claiming your spot…"). Form fields lock while a claim or invite check is in flight; the claim result fades in. Web: `Skeleton.tsx` + CSS; mobile: `lib/widgets/{skeleton,busy_button}.dart` | Your call (2026-10-08). It also fixed real bugs: list pages showed "No upcoming activities" while loading, and a double-click on "Create vouch link" could create two links and spend two held spots |
 | Vouch link disabled (web) | — | The plan page says why "Create vouch link" is unavailable (no held spots, hold ended, every held spot already vouched) | It was silently greyed out for a plan booked with +0 friends |
 | Dashboard | HTML + `POST /settings` | + `GET /dashboard/metrics` (JSON) and the count-drift check; database test files run **one at a time** | JSON for scripting; drift catches count bugs the oversell check can't; serial runs allow exact metric assertions |
@@ -160,7 +161,9 @@ velio_project/
     ├── core/view_models/{invite_entry_vm,claim_vm,my_activities_vm}.dart   InviteEntryVM (checks invite, flashbar) → ClaimVM; MyActivitiesVM
     ├── core/services/{navigation_service,storage_service}.dart
     ├── core/providers.dart                inviteRepo, activityRepo, storageService, navigationService (+ selected tab), inviteEntryVM, myActivitiesVM, claimVM
-    ├── utils/{sse,invite_token}.dart      sseData(), inviteToken()
+    ├── core/constants/velio_theme.dart    VelioTokens (mirrors web CSS tokens) + velioTheme()
+    ├── widgets/{surfaces,busy_button,skeleton}.dart   PageHeader, Panel, VelioBadge, Notice; BusyButton; Skeleton
+    ├── utils/{sse,invite_token,format_when}.dart      sseData(), inviteToken(), formatWhen()
     └── views/{controller/controller_screen.dart (tabs), home/home_screen.dart, home/widget/flash_bar.dart, my_activities/my_activities_screen.dart, claim/claim_screen.dart, claim/widget/*}
 ```
 

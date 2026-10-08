@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+
 import 'package:fpdart/fpdart.dart';
 import 'package:velio_flutter/core/api/models/invite_models.dart';
 import 'package:velio_flutter/core/api/models/my_activity_model.dart';
@@ -127,4 +130,12 @@ class FakeActivityRepo implements ActivityRepository {
     await gate?.future;
     return response;
   }
+}
+
+/// Widget tests run at an iPhone-sized screen (390×844 points) instead of the 800×600 default.
+void usePhoneScreen(WidgetTester tester) {
+  tester.view
+    ..physicalSize = const Size(1170, 2532)
+    ..devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
 }

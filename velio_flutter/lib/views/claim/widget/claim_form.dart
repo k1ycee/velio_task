@@ -58,7 +58,7 @@ class ClaimForm extends HookWidget {
               validator: (v) => required(v) ?? (v!.contains('@') ? null : 'Enter a valid email'),
               onFieldSubmitted: (_) => submit(),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             BusyButton(
               label: soldOut ? 'Sold out' : 'Claim my spot',
               busyLabel: 'Claiming your spot…',

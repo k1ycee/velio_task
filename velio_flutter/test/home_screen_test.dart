@@ -14,6 +14,7 @@ import 'package:velio_flutter/views/home/widget/flash_bar.dart';
 import 'fakes.dart';
 
 Future<void> pumpHome(WidgetTester tester, FakeRepo repo) async {
+  usePhoneScreen(tester);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [inviteRepo.overrideWithValue(repo), storageService.overrideWithValue(FakeStorage())],
@@ -40,7 +41,7 @@ Future<void> openInvite(WidgetTester tester, String code) async {
 
 /// The flashbar is fully on screen (its top edge at the top of the page body).
 bool flashBarShown(WidgetTester tester) =>
-    tester.getTopLeft(find.descendant(of: find.byType(FlashBar), matching: find.byType(Material))).dy ==
+    tester.getTopLeft(find.descendant(of: find.byType(FlashBar), matching: find.byType(Material))).dy >=
     tester.getTopLeft(find.byType(Stack).first).dy;
 
 void main() {

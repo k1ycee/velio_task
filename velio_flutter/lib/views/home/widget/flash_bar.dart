@@ -22,34 +22,43 @@ class FlashBar extends HookWidget {
     }, const []);
 
     final slideWeight = slide.inMilliseconds.toDouble();
-    final position = controller.drive(TweenSequence<Offset>([
-      TweenSequenceItem(
-        tween: Tween(begin: const Offset(0, -1), end: Offset.zero).chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: slideWeight,
-      ),
-      TweenSequenceItem(tween: ConstantTween(Offset.zero), weight: hold.inMilliseconds.toDouble()),
-      TweenSequenceItem(
-        tween: Tween(begin: Offset.zero, end: const Offset(0, -1)).chain(CurveTween(curve: Curves.easeInCubic)),
-        weight: slideWeight,
-      ),
-    ]));
+    final position = controller.drive(
+      TweenSequence<Offset>([
+        TweenSequenceItem(
+          tween: Tween(begin: const Offset(0, -1), end: Offset.zero).chain(CurveTween(curve: Curves.easeOutCubic)),
+          weight: slideWeight,
+        ),
+        TweenSequenceItem(tween: ConstantTween(Offset.zero), weight: hold.inMilliseconds.toDouble()),
+        TweenSequenceItem(
+          tween: Tween(begin: Offset.zero, end: const Offset(0, -1)).chain(CurveTween(curve: Curves.easeInCubic)),
+          weight: slideWeight,
+        ),
+      ]),
+    );
 
     final scheme = Theme.of(context).colorScheme;
     return SlideTransition(
       position: position,
-      child: Semantics(
-        liveRegion: true,
-        child: Material(
-          color: scheme.errorContainer,
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Icon(Icons.error_outline, color: scheme.onErrorContainer),
-                const SizedBox(width: 12),
-                Expanded(child: Text(message, style: TextStyle(color: scheme.onErrorContainer))),
-              ],
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: Semantics(
+          liveRegion: true,
+          // Inset with the web notice's 8px radius, so it reads as the same component dropping in.
+          child: Material(
+            color: scheme.errorContainer,
+            elevation: 2,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: scheme.onErrorContainer),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(message, style: TextStyle(color: scheme.onErrorContainer)),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

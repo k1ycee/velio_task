@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiError, api, type Invite, type Plan } from './api';
+import { vouchBlockedReason } from './invites';
 import { useLiveCounts } from './live';
 import { SpotsLeft } from './SpotsLeft';
 import { formatCountdown, formatWhen, holdProgress, useNow } from './time';
@@ -91,7 +92,7 @@ export function PlanPage({ userId, planId }: { userId: string; planId: string })
         </ul>
       </section>
 
-      <InviteSection userId={userId} plan={plan} onChange={load} canVouch={holding} />
+      <InviteSection userId={userId} plan={plan} onChange={load} vouchBlocked={vouchBlockedReason(plan, now)} />
     </div>
   );
 }
@@ -100,12 +101,12 @@ function InviteSection({
   userId,
   plan,
   onChange,
-  canVouch,
+  vouchBlocked,
 }: {
   userId: string;
   plan: Plan;
   onChange: () => void;
-  canVouch: boolean;
+  vouchBlocked: string | null;
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const hasPublic = plan.invites.some((i) => i.type === 'public');
@@ -133,8 +134,14 @@ function InviteSection({
       <h2>Invite friends</h2>
       <div className="invite-actions">
         <form onSubmit={vouch} className="inline">
-          <input name="label" placeholder="Who are you vouching for?" aria-label="Friend's name" disabled={!canVouch} />
-          <button type="submit" disabled={!canVouch} title="I stand behind this person — one link per friend">
+          <input
+            name="label"
+            placeholder="Who are you vouching for?"
+            aria-label="Friend's name"
+            aria-describedby={vouchBlocked ? 'vouch-blocked' : undefined}
+            disabled={!!vouchBlocked}
+          />
+          <button type="submit" disabled={!!vouchBlocked} title="I stand behind this person — one link per friend">
             Create vouch link
           </button>
         </form>
@@ -144,6 +151,11 @@ function InviteSection({
           </button>
         )}
       </div>
+      {vouchBlocked && (
+        <p id="vouch-blocked" className="notice">
+          {vouchBlocked}
+        </p>
+      )}
       <p className="muted small">
         A vouch link is for one friend you stand behind and saves them a held spot. The public link is for sharing
         anywhere — it fills unvouched held spots first, then open spots.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyUpdate } from './live';
 import { formatCountdown, holdProgress } from './time';
+import { vouchBlockedReason } from './invites';
 
 describe('applyUpdate', () => {
   const start = { '1': { spotsLeft: 5, version: 2 } };
@@ -38,5 +39,31 @@ describe('holdProgress', () => {
     expect(holdProgress(s, e, new Date('2026-10-07T15:00:00Z'))).toBe(0.5);
     expect(holdProgress(s, e, new Date('2026-10-07T09:00:00Z'))).toBe(0);
     expect(holdProgress(s, e, new Date('2026-10-07T21:00:00Z'))).toBe(1);
+  });
+});
+
+describe('vouchBlockedReason', () => {
+  const now = new Date('2026-10-08T10:00:00Z');
+  const plan = (heldSpotsLeft: number, unusedVouches: number, expiresAt = '2026-10-08T12:00:00Z') => ({
+    heldSpotsLeft,
+    holdExpiresAt: expiresAt,
+    invites: Array.from({ length: unusedVouches }, () => ({ type: 'vouch' as const, used: false })),
+  });
+
+  it('allows vouching while an unbound held spot is left', () => {
+    expect(vouchBlockedReason(plan(2, 1), now)).toBeNull();
+  });
+
+  it('explains a booking made without held spots (the silent-disable bug)', () => {
+    expect(vouchBlockedReason(plan(0, 0), now)).toMatch(/no held spots/i);
+    expect(vouchBlockedReason(plan(0, 0), now)).toMatch(/public link/i);
+  });
+
+  it('explains when the hold window has ended', () => {
+    expect(vouchBlockedReason(plan(2, 0, '2026-10-08T09:00:00Z'), now)).toMatch(/hold has ended/i);
+  });
+
+  it('explains when every held spot already has a vouch link', () => {
+    expect(vouchBlockedReason(plan(2, 2), now)).toMatch(/already has a vouch link/i);
   });
 });

@@ -156,6 +156,7 @@ cd velio_flutter && flutter test                     # 18 (one runs against the 
 | `port is already allocated` | A dev server (`npm run start:dev` / `npm run dev`) is still running on :3000 / :5173. Stop it. |
 | Web shows "Request failed" | API not running on :3000, or set `VITE_API_URL`. |
 | Window B shows the same user as A | Use a private window or a different browser for B. |
+| "Create vouch link" is greyed out | A vouch link reserves one of your **held spots**. The plan page now says why it's unavailable: you booked with **+0 friends**, the hold ended, or every held spot already has a vouch link. Book with **+1 or +2 friends** to vouch; the public link always works. |
 | Simulator shows a stuck "Open in Velio?" dialog | Tap **Open**; if it persists, restart the simulator (`xcrun simctl shutdown all`). |
 | Phone app can't reach the API on a **physical** device | `flutter run --dart-define=API_URL=http://<your-mac-lan-ip>:3000` |
 | Android emulator | `--dart-define=API_URL=http://10.0.2.2:3000` |

@@ -64,6 +64,7 @@ a { color: var(--accent); }
 .small { font-size: 0.875rem; }
 .empty { color: var(--muted); padding: 24px 0; }
 .error { color: var(--danger); margin: 8px 0 0; }
+.notice { margin: 4px 0 8px; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--text); font-size: 0.9rem; }
 
 input, select, button { font: inherit; border-radius: 8px; border: 1px solid var(--border); padding: 8px 12px; background: var(--surface); color: var(--text); min-height: 40px; }
 button { background: var(--accent); color: var(--accent-text); border-color: var(--accent); cursor: pointer; font-weight: 600; }

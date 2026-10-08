@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
 import { DbModule } from './db/db.module.js';
 import { UsersController } from './users/users.controller.js';
 import { ActivitiesController } from './activities/activities.controller.js';
@@ -19,7 +17,7 @@ import { APP_FILTER } from '@nestjs/core';
 
 @Module({
   imports: [DbModule, ScheduleModule.forRoot()],
-  controllers: [AppController, UsersController, ActivitiesController, BookingsController, InvitesController, LiveController, PlansController, DashboardController],
-  providers: [AppService, BookingsService, InvitesService, ExpiryService, LiveService, { provide: APP_FILTER, useClass: PgErrorFilter }],
+  controllers: [UsersController, ActivitiesController, BookingsController, InvitesController, LiveController, PlansController, DashboardController],
+  providers: [BookingsService, InvitesService, ExpiryService, LiveService, { provide: APP_FILTER, useClass: PgErrorFilter }],
 })
 export class AppModule {}

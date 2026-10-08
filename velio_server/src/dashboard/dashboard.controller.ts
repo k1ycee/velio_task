@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Header, Post, Res } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Post, Redirect, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { DbService } from '../db/db.service.js';
 import { settings } from '../db/schema.js';
@@ -10,6 +10,11 @@ import { computeMetrics, type Metrics } from './metrics.js';
 @Controller()
 export class DashboardController {
   constructor(private readonly db: DbService) {}
+
+  /** The API has no home page of its own; its one human-facing page is the dashboard. */
+  @Get()
+  @Redirect('/dashboard', 302)
+  root() {}
 
   @Get('dashboard')
   @Header('Content-Type', 'text/html; charset=utf-8')

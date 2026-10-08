@@ -6,14 +6,18 @@ import '../api/models/invite_models.dart';
 import '../repositories/invite_repo.dart';
 import '../repositories/request_failure.dart';
 import '../services/storage_service.dart';
+import 'invite_entry_vm.dart';
 
-enum ClaimStatus { loading, ready, claiming, claimed, soldOut, error }
+enum ClaimStatus { loading, ready, claiming, claimed, soldOut }
 
+/// The claim page. It only opens for an invite the "Got an invite?" page already checked;
+/// if the vouch link is used up by the time the guest claims, [onInviteUnusable] sends them back there.
 class ClaimVM extends ChangeNotifier {
-  ClaimVM(this._repo, this._storage);
+  ClaimVM(this._repo, this._storage, {required this.onInviteUnusable});
 
   final InviteRepository _repo;
   final StorageService _storage;
+  final void Function(String message) onInviteUnusable;
 
   ClaimStatus _status = ClaimStatus.loading;
   ClaimStatus get status => _status;
@@ -34,21 +38,13 @@ class ClaimVM extends ChangeNotifier {
   Timer? _reconnect;
   bool _disposed = false;
 
-  Future<void> open(String token) async {
+  Future<void> start(String token, InviteDetails invite) async {
     _token = token;
-    _set(status: ClaimStatus.loading, message: null);
+    _invite = invite;
     _userId = await _storage.userId();
-    final res = await _repo.getInvite(token, userId: _userId);
-    res.fold(
-      (f) => _set(status: ClaimStatus.error, message: f.message),
-      (invite) {
-        _invite = invite;
-        _applyCount(invite.activity.spotsLeft, invite.activity.version);
-        _set(status: invite.used ? ClaimStatus.soldOut : ClaimStatus.ready,
-            message: invite.used ? 'This vouch link has already been used.' : null);
-        _listen();
-      },
-    );
+    _applyCount(invite.activity.spotsLeft, invite.activity.version);
+    _set(status: ClaimStatus.ready, message: null);
+    _listen();
   }
 
   /// App came back to the foreground: reconnect, which starts with a fresh snapshot.
@@ -87,7 +83,7 @@ class ClaimVM extends ChangeNotifier {
       case 'race_lost':
         _set(status: ClaimStatus.soldOut, message: 'Sorry, that spot was just taken.');
       case 'used':
-        _set(status: ClaimStatus.ready, message: 'This vouch link has already been used.');
+        onInviteUnusable(usedVouchMessage);
       case 'duplicate':
         _set(status: ClaimStatus.ready, message: 'You already have a spot for this activity.');
       default:

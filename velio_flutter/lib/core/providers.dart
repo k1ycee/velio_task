@@ -5,6 +5,7 @@ import 'repositories/invite_repo.dart';
 import 'services/navigation_service.dart';
 import 'services/storage_service.dart';
 import 'view_models/claim_vm.dart';
+import 'view_models/invite_entry_vm.dart';
 
 final inviteRepo = Provider((ref) => InviteRepository());
 final storageService = Provider((ref) => StorageService());
@@ -14,7 +15,16 @@ final navigationService = Provider((ref) {
   return service;
 });
 
+/// Lives as long as the app: the "Got an invite?" page and its flashbar.
+final inviteEntryVM = ChangeNotifierProvider(
+  (ref) => InviteEntryVM(ref.read(inviteRepo), ref.read(storageService), ref.read(navigationService)),
+);
+
 /// One claim flow per open claim screen; disposed (and its live stream closed) when the screen goes.
 final claimVM = ChangeNotifierProvider.autoDispose(
-  (ref) => ClaimVM(ref.read(inviteRepo), ref.read(storageService)),
+  (ref) => ClaimVM(
+    ref.read(inviteRepo),
+    ref.read(storageService),
+    onInviteUnusable: (message) => ref.read(inviteEntryVM).bounce(message),
+  ),
 );

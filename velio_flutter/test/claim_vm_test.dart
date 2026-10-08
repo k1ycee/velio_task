@@ -3,6 +3,7 @@ import 'package:fpdart/fpdart.dart';
 import 'package:velio_flutter/core/api/models/invite_models.dart';
 import 'package:velio_flutter/core/repositories/request_failure.dart';
 import 'package:velio_flutter/core/view_models/claim_vm.dart';
+import 'package:velio_flutter/core/view_models/invite_entry_vm.dart';
 
 import 'fakes.dart';
 
@@ -10,31 +11,26 @@ void main() {
   late FakeRepo repo;
   late FakeStorage storage;
   late ClaimVM vm;
+  late List<String> bounced;
 
   setUp(() {
     repo = FakeRepo();
     storage = FakeStorage();
-    vm = ClaimVM(repo, storage);
+    bounced = [];
+    vm = ClaimVM(repo, storage, onInviteUnusable: bounced.add);
   });
   tearDown(() => vm.dispose());
 
-  test('open loads the invite and its live count, passing the known user', () async {
-    storage.id = '5';
-    await vm.open('tok');
+  test('start shows the checked invite and its live count without fetching it again', () async {
+    await vm.start('tok', invite());
     expect(vm.status, ClaimStatus.ready);
     expect(vm.invite!.inviterName, 'Booky');
     expect(vm.spotsLeft, 4);
-    expect(repo.openedWithUser, '5');
-  });
-
-  test('open shows an error for an unknown invite', () async {
-    await vm.open('missing');
-    expect(vm.status, ClaimStatus.error);
-    expect(vm.message, 'invite not found');
+    expect(repo.getInviteCalls, 0); // invite_opened is counted once, by the invite page
   });
 
   test('live updates apply only when newer, and committed ones report latency', () async {
-    await vm.open('tok');
+    await vm.start('tok', invite());
     repo.live.add(Availability(activityId: '11', spotsLeft: 3, version: 2, committedAt: DateTime.now()));
     await pumpEventQueue();
     expect(vm.spotsLeft, 3);
@@ -46,7 +42,7 @@ void main() {
   });
 
   test('claim creates the identity once, stores it, and succeeds', () async {
-    await vm.open('tok');
+    await vm.start('tok', invite());
     repo.claimResponse = right(result());
     await vm.claim(name: 'Guest', phone: '+15551234', email: 'g@x.com');
     expect(vm.status, ClaimStatus.claimed);
@@ -57,7 +53,7 @@ void main() {
   });
 
   test('released vouch: explains the open-spot fallback', () async {
-    await vm.open('tok');
+    await vm.start('tok', invite());
     repo.claimResponse = right(result(source: 'open', spotsLeft: 2, version: 3));
     await vm.claim(name: 'Guest', phone: '+15551234', email: 'g@x.com');
     expect(vm.status, ClaimStatus.claimed);
@@ -66,23 +62,28 @@ void main() {
   });
 
   test('race lost: sold out, with a plain message', () async {
-    await vm.open('tok');
+    await vm.start('tok', invite());
     repo.claimResponse = left(const RequestFailure(message: 'x', statusCode: 409, reason: 'race_lost'));
     await vm.claim(name: 'Guest', phone: '+15551234', email: 'g@x.com');
     expect(vm.status, ClaimStatus.soldOut);
     expect(vm.message, 'Sorry, that spot was just taken.');
   });
 
-  test('used vouch and duplicate claims get their own messages', () async {
-    await vm.open('tok');
+  test('vouch used up before the claim: sends the guest back to the invite page', () async {
+    await vm.start('tok', invite());
     repo.claimResponse = left(const RequestFailure(message: 'x', statusCode: 409, reason: 'used'));
     await vm.claim(name: 'Guest', phone: '+15551234', email: 'g@x.com');
-    expect(vm.message, 'This vouch link has already been used.');
-    expect(vm.status, ClaimStatus.ready);
+    expect(bounced, [usedVouchMessage]);
+    expect(vm.message, isNull); // nothing shown on the claim page
+  });
 
+  test('duplicate claims explain themselves on the claim page', () async {
+    await vm.start('tok', invite());
     repo.claimResponse = left(const RequestFailure(message: 'x', statusCode: 409, reason: 'duplicate'));
+    await vm.claim(name: 'Guest', phone: '+15551234', email: 'g@x.com');
     await vm.claim(name: 'Guest', phone: '+15551234', email: 'g@x.com');
     expect(vm.message, 'You already have a spot for this activity.');
     expect(repo.createdUsers, ['Guest']); // identity reused from storage
+    expect(bounced, isEmpty);
   });
 }

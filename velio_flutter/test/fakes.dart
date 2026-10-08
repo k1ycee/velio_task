@@ -4,6 +4,7 @@ import 'package:fpdart/fpdart.dart';
 import 'package:velio_flutter/core/api/models/invite_models.dart';
 import 'package:velio_flutter/core/repositories/invite_repo.dart';
 import 'package:velio_flutter/core/repositories/request_failure.dart';
+import 'package:velio_flutter/core/services/navigation_service.dart';
 import 'package:velio_flutter/core/services/storage_service.dart';
 
 InviteDetails invite({String type = 'vouch', bool used = false, int spotsLeft = 4, int version = 1}) =>
@@ -31,11 +32,13 @@ class FakeRepo implements InviteRepository {
   final reported = <Availability>[];
   final createdUsers = <String>[];
   String? openedWithUser;
+  int getInviteCalls = 0;
   String? claimedWithUser;
 
   @override
   Future<Either<RequestFailure, InviteDetails>> getInvite(String token, {String? userId}) async {
     openedWithUser = userId;
+    getInviteCalls++;
     return token == 'missing'
         ? left(const RequestFailure(message: 'invite not found', statusCode: 404))
         : right(details);
@@ -77,3 +80,12 @@ ClaimResult result({String source = 'held', int spotsLeft = 4, int version = 1})
       'spotsLeft': spotsLeft,
       'version': version,
     });
+
+class FakeNav extends NavigationService {
+  InviteDetails? opened;
+  int backToHomeCalls = 0;
+  @override
+  void openClaim(String token, InviteDetails invite) => opened = invite;
+  @override
+  void backToHome() => backToHomeCalls++;
+}

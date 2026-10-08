@@ -16,10 +16,10 @@
 
 **Companion docs:** [`README.md`](README.md) (run it, architecture, trade-offs, tracking) · [`TESTING.md`](TESTING.md) (demo script) · [`OWNERSHIP.md`](OWNERSHIP.md) (invite-funnel diagnosis and improvements).
 
-**Status (2026-10-07): all 14 tasks done** across 13 commits on `main`. Every suite is green:
+**Status (2026-10-08): all 14 tasks done**, plus post-build fixes (vouch-link explanation on the web, used-vouch flashbar on mobile). Every suite is green:
 - server: 10 unit tests + 60 database (e2e) tests
-- web: 9 tests
-- Flutter: 18 tests
+- web: 13 tests
+- Flutter: 24 tests
 
 Builds and linters are clean. See [Verification](#9-verification) for what has and hasn't been checked by eye.
 
@@ -83,6 +83,8 @@ All of these are on `GET /dashboard` (HTML) and `GET /dashboard/metrics` (JSON).
 | Flutter structure | `api.dart`, `availability_stream.dart`, `claim_screen.dart` | Preferred mobile architecture: views → `ClaimVM` → `InviteRepository` → `InviteClient` (Dio) + services | Your `preferred-mobile-architecture` skill |
 | Flutter HTTP | `http` | `dio` (Dio delivers `Uint8List` streams, so the SSE parser `cast`s the bytes) | Required by the architecture; regression test in `sse_test.dart` |
 | Flutter extras | — | Home screen for pasting a link or code; `StorageService` remembers the user ID; SSE reconnect after 2s | The scope says guests arrive "through a link **or code**"; returning guests skip identity entry |
+| Invalid-invite errors (mobile) | Shown on the claim screen | **Checked on the "Got an invite?" page first** (`InviteEntryVM`). A used vouch link or unknown invite shows a **flashbar at the top** and the claim page never opens. A vouch used up while the guest fills the form sends them back there with the same flashbar. Pasted codes, tapped links and the launch link all go through this check | Your call (2026-10-08): the claim page is only for claiming and its confirmation. The invite is fetched once and handed to the claim page, so `invite_opened` still counts once |
+| Vouch link disabled (web) | — | The plan page says why "Create vouch link" is unavailable (no held spots, hold ended, every held spot already vouched) | It was silently greyed out for a plan booked with +0 friends |
 | Dashboard | HTML + `POST /settings` | + `GET /dashboard/metrics` (JSON) and the count-drift check; database test files run **one at a time** | JSON for scripting; drift catches count bugs the oversell check can't; serial runs allow exact metric assertions |
 | Queries | Inside the dashboard code only | + `velio_server/queries/metrics.sql` (same definitions, runnable in `psql`, optional `since` filter) | Reviewers can run the queries directly; checked to match `/dashboard/metrics` exactly |
 | Demo tooling | — | `velio_server/scripts/race-demo.sh` (N guests race for the last spot); Flutter `--dart-define=INVITE=<link or token>` opens an invite on launch | Shows zero oversell live; skips the iOS "Open in Velio?" prompt during demos |
@@ -152,11 +154,11 @@ velio_project/
     ├── main.dart                          ProviderScope, theme, deep-link listener
     ├── core/api/{urls.dart, models/invite_models.dart, clients/invite_client.dart}
     ├── core/repositories/{invite_repo,request_failure}.dart   Either<RequestFailure, T>
-    ├── core/view_models/claim_vm.dart     ClaimVM (ChangeNotifier)
+    ├── core/view_models/{invite_entry_vm,claim_vm}.dart   InviteEntryVM (checks invite, flashbar) → ClaimVM
     ├── core/services/{navigation_service,storage_service}.dart
-    ├── core/providers.dart                inviteRepo, storageService, navigationService, claimVM
+    ├── core/providers.dart                inviteRepo, storageService, navigationService, inviteEntryVM, claimVM
     ├── utils/{sse,invite_token}.dart      sseData(), inviteToken()
-    └── views/{home/home_screen.dart, claim/claim_screen.dart, claim/widget/*}
+    └── views/{home/home_screen.dart, home/widget/flash_bar.dart, claim/claim_screen.dart, claim/widget/*}
 ```
 
 ---
@@ -227,9 +229,10 @@ Each task lists the files it owns, what it gives later tasks, and the test that 
 ### M4 — Flutter: guest claim (est. 6h)
 
 #### Task 12: Deep link + claim screen (4h)
-**Files:** `lib/main.dart`, `core/**`, `views/**`, `utils/invite_token.dart`; iOS `Info.plist` (`CFBundleURLTypes` velio, `NSAllowsLocalNetworking`), Android manifests (`velio://invite` intent filter, `INTERNET`, cleartext in debug only), macOS `network.client` entitlement · **Tests:** `deep_link_test.dart`, `claim_vm_test.dart`, `claim_screen_test.dart`
-**Produces:** `ClaimVM.open(token) / claim(name, phone, email) / resume()`, `ClaimStatus {loading, ready, claiming, claimed, soldOut, error}`.
-- [x] **Done:** "X vouched for you" vs "X invited you"; form validation; claimed, sold-out, used, duplicate and released-vouch-fallback messages; the identity is created once and reused.
+**Files:** `lib/main.dart`, `core/**`, `views/**`, `utils/invite_token.dart`; iOS `Info.plist` (`CFBundleURLTypes` velio, `NSAllowsLocalNetworking`), Android manifests (`velio://invite` intent filter, `INTERNET`, cleartext in debug only), macOS `network.client` entitlement · **Tests:** `deep_link_test.dart`, `invite_entry_vm_test.dart`, `home_screen_test.dart`, `claim_vm_test.dart`, `claim_screen_test.dart`
+**Produces:** `InviteEntryVM.open(token) / bounce(message) / dismissFlash()` (the invite page); `ClaimVM.start(token, invite) / claim(name, phone, email) / resume()`, `ClaimStatus {loading, ready, claiming, claimed, soldOut}`.
+- [x] **Done:** "X vouched for you" vs "X invited you"; form validation; claimed, sold-out, duplicate and released-vouch-fallback messages; the identity is created once and reused.
+- [x] **Changed 2026-10-08:** used vouch links and unknown invites show a flashbar on the "Got an invite?" page instead of the claim page, including a vouch used up mid-claim (checked on the iOS simulator).
 
 #### Task 13: Live count in Flutter (2h)
 **Files:** `lib/utils/sse.dart`, `InviteClient.availability()` · **Tests:** `sse_test.dart`, `live_backend_test.dart`
@@ -293,7 +296,7 @@ The fallback cut order (dashboard settings form → plan-page polish → Flutter
 | --- | --- |
 | `velio_server`: `npm test` · `npm run test:e2e` | 10 · 60 passing (repeated runs, no flakes); build and lint clean |
 | `velio_web`: `npm test` · `npm run build` · `npm run lint` | 9 passing; clean |
-| `velio_flutter`: `flutter analyze` · `flutter test` | No issues; 18 passing, including the real-server test |
+| `velio_flutter`: `flutter analyze` · `flutter test` | No issues; 24 passing, including the real-server test (which also checks that reopening a used vouch link is stopped on the invite page) |
 | Platform builds | `flutter build macos --debug` ✅ · `flutter build ios --debug --no-codesign` ✅ |
 | Docker stack | `docker compose up -d --build`: all four services healthy; a fresh database is migrated on start; the race demo and the headless-Chrome flow pass against the containers |
 | Real server smoke test | `curl -N` stream showed the snapshot and then the post-commit update |

@@ -16,7 +16,7 @@ Future<FakeRepo> pumpClaim(WidgetTester tester, {FakeRepo? repo}) async {
       inviteRepo.overrideWithValue(fake),
       storageService.overrideWithValue(FakeStorage()),
     ],
-    child: const MaterialApp(home: ClaimScreen(token: 'tok')),
+    child: MaterialApp(home: ClaimScreen(token: 'tok', invite: fake.details)),
   ));
   await tester.pumpAndSettle();
   return fake;

@@ -25,9 +25,10 @@ class _VelioAppState extends ConsumerState<VelioApp> {
     super.initState();
     // Covers both the link that launched the app and links tapped while it runs.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final nav = ref.read(navigationService)..listenForInviteLinks();
+      final entry = ref.read(inviteEntryVM);
+      ref.read(navigationService).listenForInviteLinks(entry.open);
       final token = inviteToken(_launchInvite);
-      if (token != null) nav.openInvite(token);
+      if (token != null) entry.open(token);
     });
   }
 

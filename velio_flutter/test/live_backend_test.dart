@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:velio_flutter/core/api/urls.dart';
 import 'package:velio_flutter/core/repositories/invite_repo.dart';
 import 'package:velio_flutter/core/view_models/claim_vm.dart';
+import 'package:velio_flutter/core/view_models/invite_entry_vm.dart';
 
 import 'fakes.dart';
 
@@ -57,9 +58,13 @@ void main() async {
     final invite = await dio.post<Map<String, dynamic>>('/plans/${booking.data!['planId']}/invites',
         options: as(booker), data: {'type': 'vouch', 'label': 'Guest'});
 
-    final vm = ClaimVM(InviteRepository(), FakeStorage());
+    final token = invite.data!['token'] as String;
+    final nav = FakeNav();
+    final entry = InviteEntryVM(InviteRepository(), FakeStorage(), nav);
+    await entry.open(token);
+    final vm = ClaimVM(InviteRepository(), FakeStorage(), onInviteUnusable: entry.bounce);
     addTearDown(vm.dispose);
-    await vm.open(invite.data!['token'] as String);
+    await vm.start(token, nav.opened!);
     expect(vm.status, ClaimStatus.ready);
     expect(vm.invite!.isVouch, isTrue);
     expect(vm.spotsLeft, 4);
@@ -74,5 +79,11 @@ void main() async {
     await vm.claim(name: 'Guest', phone: '+1${++n}', email: 'g$n@flutter.test');
     expect(vm.status, ClaimStatus.claimed);
     expect(vm.message, isNull); // came from the held spot, no fallback
+
+    // Opening the same vouch link again is stopped on the invite page.
+    nav.opened = null;
+    await entry.open(token);
+    expect(nav.opened, isNull);
+    expect(entry.flash, usedVouchMessage);
   }, skip: up ? false : 'velio_server not running at $apiUrl');
 }

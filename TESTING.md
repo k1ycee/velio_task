@@ -111,7 +111,7 @@ flutter run -d "iPhone 17 Pro"            # first build takes a few minutes (pod
    ✅ "**You're in! See you there.**" (She took the spot held for her, so the count doesn't change.)
 4. Window A: within ~5 s Bo's plan shows **Ada · VOUCH** under "Who's going", the vouch row says **claimed**, and "1 held spot to fill".
 5. Open the **same vouch link** again in the simulator.
-   ✅ "This vouch link has already been used." — vouch links are single-use.
+   ✅ You stay on the **Got an invite?** page and a red flashbar at the top says "This vouch link has already been used. Ask your friend for a new one." The claim page never opens: vouch links are single-use.
 6. Open Bo's **public link** in the simulator and claim.
    ✅ "You already have a spot for this activity." — the app remembers Ada, and one person can't hold two spots.
 
@@ -169,8 +169,8 @@ psql "UPDATE plans SET hold_expires_at = now() WHERE id = <id>;"   # expire it
 
 ```bash
 cd velio_server && npm test && npm run test:e2e      # 10 unit + 60 database tests (recreates a velio_test DB)
-cd velio_web && npm test                             # 9
-cd velio_flutter && flutter test                     # 18 (one runs against the live API, skips if it's down)
+cd velio_web && npm test                             # 13
+cd velio_flutter && flutter test                     # 24 (one runs against the live API, skips if it's down)
 ```
 
 ---

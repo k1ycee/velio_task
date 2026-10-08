@@ -2,22 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../core/api/models/invite_models.dart';
 import '../../core/providers.dart';
 import '../../core/view_models/claim_vm.dart';
 import 'widget/claim_form.dart';
 import 'widget/spots_left_chip.dart';
 
 class ClaimScreen extends HookConsumerWidget {
-  const ClaimScreen({super.key, required this.token});
+  const ClaimScreen({super.key, required this.token, required this.invite});
 
   final String token;
+  final InviteDetails invite;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vm = ref.watch(claimVM);
 
     useEffect(() {
-      Future.microtask(() => ref.read(claimVM).open(token));
+      Future.microtask(() => ref.read(claimVM).start(token, invite));
       return null;
     }, [token]);
     useOnAppLifecycleStateChange((_, state) {
@@ -29,7 +31,6 @@ class ClaimScreen extends HookConsumerWidget {
       body: SafeArea(
         child: switch (vm.status) {
           ClaimStatus.loading => const Center(child: CircularProgressIndicator()),
-          ClaimStatus.error => _Message(icon: Icons.link_off, text: vm.message ?? 'This invite could not be opened.'),
           _ => _Invite(vm: vm),
         },
       ),

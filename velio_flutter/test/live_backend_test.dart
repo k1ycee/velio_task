@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:velio_flutter/core/api/urls.dart';
+import 'package:velio_flutter/core/repositories/activity_repo.dart';
 import 'package:velio_flutter/core/repositories/invite_repo.dart';
 import 'package:velio_flutter/core/view_models/claim_vm.dart';
 import 'package:velio_flutter/core/view_models/invite_entry_vm.dart';
@@ -62,7 +63,8 @@ void main() async {
     final nav = FakeNav();
     final entry = InviteEntryVM(InviteRepository(), FakeStorage(), nav);
     await entry.open(token);
-    final vm = ClaimVM(InviteRepository(), FakeStorage(), onInviteUnusable: entry.bounce);
+    final storage = FakeStorage();
+    final vm = ClaimVM(InviteRepository(), storage, onInviteUnusable: entry.bounce);
     addTearDown(vm.dispose);
     await vm.start(token, nav.opened!);
     expect(vm.status, ClaimStatus.ready);
@@ -79,6 +81,10 @@ void main() async {
     await vm.claim(name: 'Guest', phone: '+1${++n}', email: 'g$n@flutter.test');
     expect(vm.status, ClaimStatus.claimed);
     expect(vm.message, isNull); // came from the held spot, no fallback
+
+    // The claimed activity shows on the guest's "My activities" tab, booked by Booky.
+    final mine = (await ActivityRepository().myActivities(storage.id!)).getOrElse((f) => throw f.message);
+    expect(mine.map((a) => (a.activity.id, a.role, a.bookerName)), [(activityId, 'guest', 'Booky')]);
 
     // Opening the same vouch link again is stopped on the invite page.
     nav.opened = null;

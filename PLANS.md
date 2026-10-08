@@ -16,10 +16,10 @@
 
 **Companion docs:** [`README.md`](README.md) (run it, architecture, trade-offs, tracking) · [`TESTING.md`](TESTING.md) (demo script) · [`OWNERSHIP.md`](OWNERSHIP.md) (invite-funnel diagnosis and improvements).
 
-**Status (2026-10-08): all 14 tasks done**, plus post-build fixes (vouch-link explanation on the web, used-vouch flashbar on mobile). Every suite is green:
-- server: 10 unit tests + 60 database (e2e) tests
+**Status (2026-10-08): all 14 tasks done**, plus post-build changes (vouch-link explanation on the web, used-vouch flashbar and a "My activities" tab on mobile). Every suite is green:
+- server: 10 unit tests + 62 database (e2e) tests
 - web: 13 tests
-- Flutter: 24 tests
+- Flutter: 28 tests
 
 Builds and linters are clean. See [Verification](#9-verification) for what has and hasn't been checked by eye.
 
@@ -76,7 +76,8 @@ All of these are on `GET /dashboard` (HTML) and `GET /dashboard/metrics` (JSON).
 | `POST /events` | Any client event | Only `availability_received`; the server computes `latencyMs` with clock-drift correction | Clients can't forge business events; phone clocks drift |
 | Live streams | `GET /activities/:id/stream` | **+ `GET /activities/stream`** (all activities, one connection) | Browsers allow only 6 connections per host on HTTP/1.1, so a list page can't open one per activity |
 | Stream ordering | Snapshot, then updates | Subscribe to updates **before** reading the snapshot | Otherwise a commit landing in between would be missed |
-| Read endpoints | — | **+ `GET /activities`, `GET /plans`, `GET /plans/:id`, `GET /users`** | Needed by the React list, plan and identity-picker pages |
+| Read endpoints | — | **+ `GET /activities`, `GET /plans`, `GET /plans/:id`, `GET /users`, `GET /users/me/activities`** | Needed by the React list, plan and identity-picker pages, and the guest app's "My activities" tab |
+| Guest app navigation (mobile) | One claim screen | **Two bottom tabs: "Invite" (Got an invite?) and "My activities"** (every activity the guest booked or claimed, with date and time, split into Upcoming and Past, "With <booker>" or "You booked this"). It loads on launch, when the tab is opened, after a claim, and on pull-to-refresh. A used invite always switches back to the Invite tab for the flashbar | Your call (2026-10-08): guests need to see what they've signed up for and when |
 | Web live hook | `useAvailability(activityId)` | `useLiveCounts(userId)` → `{counts, seed, resyncKey}`; pages reload when `resyncKey` changes (reconnect or tab focus) | One connection per page; reloading on resync covers sleep and dropped connections |
 | Web routing / identity | — | Hash routing (3 routes); identity picker + "New user" stored in `localStorage` | No router library needed; simple role toggle per the brief |
 | Plan membership | live | Polled every 5s | Only spot counts are pushed live; membership changes rarely |
@@ -106,6 +107,7 @@ All endpoints are in `velio_server/src`. `🔑` means the endpoint requires an `
 | `GET /activities/:id/availability` | | `{spotsLeft, version}` | 404 |
 | `POST /bookings {activityId, heldSpots}` | 🔑 | `201 {planId, holdExpiresAt, spotsLeft, version}` | 422 `{cap}` · 409 `{reason:'race_lost', available}` · 409 `duplicate` · 400 started |
 | `GET /plans` | 🔑 | the caller's plans | |
+| `GET /users/me/activities` | 🔑 | `[{planId, role:'booker'\|'guest', bookerName, activity}]` for every spot the caller holds, soonest first | 401 without `X-User-Id` |
 | `GET /plans/:id` | 🔑 booker | plan, activity, hold times, `heldSpotsLeft`, members, invites | 403 · 404 |
 | `POST /plans/:id/invites {type, label?}` | 🔑 booker | `201 {inviteId, type, token, label, url}` (public: `200` if it already exists) | 409 `no_held_spot` · 403 |
 | `GET /invites/:token` | optional | invite + activity + inviter name; records `invite_opened` | 404 |
@@ -152,13 +154,13 @@ velio_project/
 │   └── logic.test.ts
 └── velio_flutter/lib/                     preferred mobile architecture
     ├── main.dart                          ProviderScope, theme, deep-link listener
-    ├── core/api/{urls.dart, models/invite_models.dart, clients/invite_client.dart}
-    ├── core/repositories/{invite_repo,request_failure}.dart   Either<RequestFailure, T>
-    ├── core/view_models/{invite_entry_vm,claim_vm}.dart   InviteEntryVM (checks invite, flashbar) → ClaimVM
+    ├── core/api/{urls.dart, models/{invite_models,my_activity_model}.dart, clients/{invite_client,activity_client}.dart}
+    ├── core/repositories/{invite_repo,activity_repo,request_failure}.dart   Either<RequestFailure, T> via attempt()
+    ├── core/view_models/{invite_entry_vm,claim_vm,my_activities_vm}.dart   InviteEntryVM (checks invite, flashbar) → ClaimVM; MyActivitiesVM
     ├── core/services/{navigation_service,storage_service}.dart
-    ├── core/providers.dart                inviteRepo, storageService, navigationService, inviteEntryVM, claimVM
+    ├── core/providers.dart                inviteRepo, activityRepo, storageService, navigationService (+ selected tab), inviteEntryVM, myActivitiesVM, claimVM
     ├── utils/{sse,invite_token}.dart      sseData(), inviteToken()
-    └── views/{home/home_screen.dart, home/widget/flash_bar.dart, claim/claim_screen.dart, claim/widget/*}
+    └── views/{controller/controller_screen.dart (tabs), home/home_screen.dart, home/widget/flash_bar.dart, my_activities/my_activities_screen.dart, claim/claim_screen.dart, claim/widget/*}
 ```
 
 ---
@@ -232,6 +234,7 @@ Each task lists the files it owns, what it gives later tasks, and the test that 
 **Files:** `lib/main.dart`, `core/**`, `views/**`, `utils/invite_token.dart`; iOS `Info.plist` (`CFBundleURLTypes` velio, `NSAllowsLocalNetworking`), Android manifests (`velio://invite` intent filter, `INTERNET`, cleartext in debug only), macOS `network.client` entitlement · **Tests:** `deep_link_test.dart`, `invite_entry_vm_test.dart`, `home_screen_test.dart`, `claim_vm_test.dart`, `claim_screen_test.dart`
 **Produces:** `InviteEntryVM.open(token) / bounce(message) / dismissFlash()` (the invite page; `FlashBar` dismisses itself after 2s); `ClaimVM.start(token, invite) / claim(name, phone, email) / resume()`, `ClaimStatus {loading, ready, claiming, claimed, soldOut}`.
 - [x] **Done:** "X vouched for you" vs "X invited you"; form validation; claimed, sold-out, duplicate and released-vouch-fallback messages; the identity is created once and reused.
+- [x] **Added 2026-10-08:** a "My activities" tab (`GET /users/me/activities`), checked on the iOS simulator with real data. Tests: `users-activities.e2e-spec.ts`, `my_activities_test.dart`, `live_backend_test.dart`.
 - [x] **Changed 2026-10-08:** used vouch links and unknown invites show a flashbar on the "Got an invite?" page instead of the claim page, including a vouch used up mid-claim (checked on the iOS simulator).
 
 #### Task 13: Live count in Flutter (2h)
@@ -294,9 +297,9 @@ The fallback cut order (dashboard settings form → plan-page polish → Flutter
 
 | Check | Result |
 | --- | --- |
-| `velio_server`: `npm test` · `npm run test:e2e` | 10 · 60 passing (repeated runs, no flakes); build and lint clean |
+| `velio_server`: `npm test` · `npm run test:e2e` | 10 · 62 passing (repeated runs, no flakes); build and lint clean |
 | `velio_web`: `npm test` · `npm run build` · `npm run lint` | 9 passing; clean |
-| `velio_flutter`: `flutter analyze` · `flutter test` | No issues; 24 passing, including the real-server test (which also checks that reopening a used vouch link is stopped on the invite page) |
+| `velio_flutter`: `flutter analyze` · `flutter test` | No issues; 28 passing, including the real-server test (which also checks that reopening a used vouch link is stopped on the invite page and that the claim shows in "My activities") |
 | Platform builds | `flutter build macos --debug` ✅ · `flutter build ios --debug --no-codesign` ✅ |
 | Docker stack | `docker compose up -d --build`: all four services healthy; a fresh database is migrated on start; the race demo and the headless-Chrome flow pass against the containers |
 | Real server smoke test | `curl -N` stream showed the snapshot and then the post-commit update |

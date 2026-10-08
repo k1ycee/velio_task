@@ -106,3 +106,46 @@ describe('activities', () => {
     await http().get('/activities/999999999/availability').expect(404);
   });
 });
+
+describe('GET /users/me/activities', () => {
+  async function activity(hostId: string, title: string, hoursAway: number) {
+    const res = await http()
+      .post('/activities')
+      .set('X-User-Id', hostId)
+      .send({ title, startsAt: new Date(Date.now() + hoursAway * 3_600_000).toISOString(), capacity: 6 })
+      .expect(201);
+    return res.body.id as string;
+  }
+
+  it('lists the activities I booked or claimed, soonest first, with who booked them', async () => {
+    const host = await createUser(app, 'Host');
+    const bo = await createUser(app, 'Bo');
+    const gia = await createUser(app, 'Gia');
+    const later = await activity(host, 'Later', 72);
+    const sooner = await activity(host, 'Sooner', 24);
+    const notMine = await activity(host, 'Not mine', 48);
+
+    await http().post('/bookings').set('X-User-Id', gia).send({ activityId: later, heldSpots: 0 }).expect(201);
+    const plan = await http().post('/bookings').set('X-User-Id', bo).send({ activityId: sooner, heldSpots: 1 }).expect(201);
+    await http().post('/bookings').set('X-User-Id', bo).send({ activityId: notMine, heldSpots: 1 }).expect(201);
+    const vouch = await http()
+      .post(`/plans/${plan.body.planId}/invites`)
+      .set('X-User-Id', bo)
+      .send({ type: 'vouch', label: 'Gia' })
+      .expect(201);
+    await http().post(`/invites/${vouch.body.token}/claim`).set('X-User-Id', gia).send({}).expect(201);
+
+    const res = await http().get('/users/me/activities').set('X-User-Id', gia).expect(200);
+    expect(res.body).toEqual([
+      expect.objectContaining({ role: 'guest', bookerName: 'Bo', activity: expect.objectContaining({ id: sooner, title: 'Sooner' }) }),
+      expect.objectContaining({ role: 'booker', bookerName: 'Gia', activity: expect.objectContaining({ id: later, title: 'Later' }) }),
+    ]);
+    expect(res.body[0].activity.startsAt).toEqual(expect.any(String));
+  });
+
+  it('is empty for a new user and needs X-User-Id', async () => {
+    const nobody = await createUser(app, 'Nobody');
+    await http().get('/users/me/activities').set('X-User-Id', nobody).expect(200, []);
+    await http().get('/users/me/activities').expect(401);
+  });
+});

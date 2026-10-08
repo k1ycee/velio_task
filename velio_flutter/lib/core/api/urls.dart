@@ -5,6 +5,7 @@ const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost
 abstract final class Urls {
   static const users = '/users';
   static const events = '/events';
+  static const myActivities = '/users/me/activities';
   static String invite(String token) => '/invites/$token';
   static String claim(String token) => '/invites/$token/claim';
   static String activityStream(String activityId) => '/activities/$activityId/stream';

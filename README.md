@@ -9,7 +9,7 @@ A host creates an **Activity** with limited spots. A **booker** books their own 
 | `velio_flutter/` | Invited-guest app | Flutter 3.44 · Riverpod · Dio |
 | `docker-compose.yml` | Runs Postgres, Redis, the API and the web app together | Docker Compose |
 
-**Status:** all 14 planned tasks are built. 107 automated tests pass (server 10 unit + 60 database, web 13, Flutter 24), and the flows were also run in headless Chrome, on an iOS simulator, and against the Docker stack.
+**Status:** all 14 planned tasks are built. 113 automated tests pass (server 10 unit + 62 database, web 13, Flutter 28), and the flows were also run in headless Chrome, on an iOS simulator, and against the Docker stack.
 
 **More docs:**
 - [`PLANS.md`](PLANS.md): the plan and what was built.
@@ -65,9 +65,9 @@ cd velio_web && npm install && npm run dev                               # :5173
 **Tests:**
 
 ```bash
-cd velio_server && npm test && npm run test:e2e   # 10 unit + 60 against a throwaway velio_test DB (needs Postgres up)
+cd velio_server && npm test && npm run test:e2e   # 10 unit + 62 against a throwaway velio_test DB (needs Postgres up)
 cd velio_web && npm test                          # 13
-cd velio_flutter && flutter test                  # 24 (one hits the live API; skips if it's down)
+cd velio_flutter && flutter test                  # 28 (one hits the live API; skips if it's down)
 cd velio_server && ./scripts/race-demo.sh         # live oversell race: 20 guests, 1 last spot
 ```
 
@@ -172,7 +172,7 @@ There are no application locks and no Redis counters. The database decides.
 | Claim failure `sold_out` | **`race_lost` everywhere**, plus `duplicate` and `no_held_spot` | One reason for "no spot at commit" keeps the 99.5% calculation clean |
 | Flutter sends `invite_opened` | **The server records it** on `GET /invites/:token` | More reliable; clients can't forge business events (`POST /events` accepts only latency reports) |
 | Read endpoints not planned | `GET /activities`, `/plans`, `/plans/:id`, `/users` | The web pages needed them |
-| Flutter: 3 files with `http` | **The team's preferred mobile architecture** (view → view model → repository → Dio client), plus a paste-a-code home screen and a `--dart-define=INVITE` launch shortcut | Team house style; the scope says guests arrive "by link **or code**" |
+| Flutter: 3 files with `http` | **The team's preferred mobile architecture** (view → view model → repository → Dio client), plus a paste-a-code home screen, a **My activities** tab (`GET /users/me/activities`), a top flashbar for used invites, and a `--dart-define=INVITE` launch shortcut | Team house style; the scope says guests arrive "by link **or code**" |
 | Dashboard: HTML only | + JSON, a **count-drift** check, and `queries/metrics.sql` | Scriptable, and catches bookkeeping bugs the oversell check can't |
 | Not planned | `scripts/race-demo.sh` | Shows zero oversell live |
 | Docker only for Postgres + Redis; API and web run with npm | **`docker compose up -d --build` runs the whole stack** (npm kept for hot reload) | One command to start everything for reviewers and demos |
@@ -188,7 +188,7 @@ Nothing in the cut was dropped. All 14 planned tasks shipped.
 1. **Correct counts first.** Zero oversell is the one target that can't be fixed after launch, so the transactional core and its concurrency tests came before any UI.
 2. **Measurability second.** Every target has an event and a query, so the product targets can be argued with data rather than guesses.
 3. **Product breadth third:** the whole loop (host → booker → vouch/public → guest claim → live counts) end to end, over polishing any one screen.
-4. **Tests before code throughout:** 107 automated tests in total, plus headless-browser and iOS-simulator runs.
+4. **Tests before code throughout:** 113 automated tests in total, plus headless-browser and iOS-simulator runs.
 
 ### Shortcuts taken (on purpose)
 

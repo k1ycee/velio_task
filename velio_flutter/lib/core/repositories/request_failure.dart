@@ -1,4 +1,14 @@
 import 'package:dio/dio.dart';
+import 'package:fpdart/fpdart.dart';
+
+/// Runs a client call, turning any thrown error into a [RequestFailure].
+Future<Either<RequestFailure, T>> attempt<T>(Future<T> Function() call) async {
+  try {
+    return right(await call());
+  } catch (e) {
+    return left(RequestFailure.from(e));
+  }
+}
 
 class RequestFailure {
   const RequestFailure({required this.message, this.statusCode, this.reason});

@@ -13,11 +13,14 @@ enum ClaimStatus { loading, ready, claiming, claimed, soldOut }
 /// The claim page. It only opens for an invite the "Got an invite?" page already checked;
 /// if the vouch link is used up by the time the guest claims, [onInviteUnusable] sends them back there.
 class ClaimVM extends ChangeNotifier {
-  ClaimVM(this._repo, this._storage, {required this.onInviteUnusable});
+  ClaimVM(this._repo, this._storage, {required this.onInviteUnusable, this.onClaimed});
 
   final InviteRepository _repo;
   final StorageService _storage;
   final void Function(String message) onInviteUnusable;
+
+  /// Lets the "My activities" tab pick up the new spot.
+  final void Function()? onClaimed;
 
   ClaimStatus _status = ClaimStatus.loading;
   ClaimStatus get status => _status;
@@ -75,6 +78,7 @@ class ClaimVM extends ChangeNotifier {
         status: ClaimStatus.claimed,
         message: fellBack ? "The spot held for you had been released, so we gave you an open spot instead." : null,
       );
+      onClaimed?.call();
     });
   }
 

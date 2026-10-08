@@ -12,12 +12,14 @@ void main() {
   late FakeStorage storage;
   late ClaimVM vm;
   late List<String> bounced;
+  late int claimedCalls;
 
   setUp(() {
     repo = FakeRepo();
     storage = FakeStorage();
     bounced = [];
-    vm = ClaimVM(repo, storage, onInviteUnusable: bounced.add);
+    claimedCalls = 0;
+    vm = ClaimVM(repo, storage, onInviteUnusable: bounced.add, onClaimed: () => claimedCalls++);
   });
   tearDown(() => vm.dispose());
 
@@ -50,6 +52,7 @@ void main() {
     expect(repo.claimedWithUser, '42');
     expect(storage.id, '42');
     expect(vm.message, isNull);
+    expect(claimedCalls, 1); // the "My activities" tab reloads
   });
 
   test('released vouch: explains the open-spot fallback', () async {

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:fpdart/fpdart.dart';
 import 'package:velio_flutter/core/api/models/invite_models.dart';
+import 'package:velio_flutter/core/api/models/my_activity_model.dart';
+import 'package:velio_flutter/core/repositories/activity_repo.dart';
 import 'package:velio_flutter/core/repositories/invite_repo.dart';
 import 'package:velio_flutter/core/repositories/request_failure.dart';
 import 'package:velio_flutter/core/services/navigation_service.dart';
@@ -88,4 +90,30 @@ class FakeNav extends NavigationService {
   void openClaim(String token, InviteDetails invite) => opened = invite;
   @override
   void backToHome() => backToHomeCalls++;
+}
+
+MyActivity mine(String title, DateTime startsAt, {String role = 'guest', String bookerName = 'Bo'}) =>
+    MyActivity.fromJson({
+      'planId': '3',
+      'role': role,
+      'bookerName': bookerName,
+      'activity': {
+        'id': title,
+        'title': title,
+        'startsAt': startsAt.toUtc().toIso8601String(),
+        'capacity': 6,
+        'spotsLeft': 2,
+        'version': 1,
+      },
+    });
+
+class FakeActivityRepo implements ActivityRepository {
+  Either<RequestFailure, List<MyActivity>> response = right(const []);
+  String? askedFor;
+
+  @override
+  Future<Either<RequestFailure, List<MyActivity>>> myActivities(String userId) async {
+    askedFor = userId;
+    return response;
+  }
 }

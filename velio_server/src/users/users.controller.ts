@@ -1,7 +1,8 @@
 import { BadRequestException, Body, Controller, Get, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { DbService } from '../db/db.service.js';
-import { requireString } from '../common/http.js';
+import { UserId, requireString } from '../common/http.js';
+import { toActivity } from '../activities/activities.controller.js';
 
 // ponytail: unverified identity (verification deferred, see PLANS.md). Phone and email are each
 // unique on their own, so a match on either returns the existing user.
@@ -14,6 +15,28 @@ export class UsersController {
   async list() {
     const { rows } = await this.db.pool.query(`SELECT id, name FROM users ORDER BY id DESC LIMIT 100`);
     return rows;
+  }
+
+  /** The guest app's "My activities" tab: every activity I hold a spot in, soonest first. */
+  @Get('me/activities')
+  async myActivities(@UserId() userId: string) {
+    const { rows } = await this.db.pool.query(
+      `SELECT s.status, s.plan_id, b.name AS booker_name,
+              a.id, a.host_id, a.title, a.starts_at, a.capacity, a.spots_left, a.version
+       FROM spots s
+       JOIN activities a ON a.id = s.activity_id
+       JOIN plans p ON p.id = s.plan_id
+       JOIN users b ON b.id = p.booker_id
+       WHERE s.user_id = $1 AND s.status IN ('booker', 'claimed')
+       ORDER BY a.starts_at, a.id`,
+      [userId],
+    );
+    return rows.map((r) => ({
+      planId: r.plan_id,
+      role: r.status === 'booker' ? 'booker' : 'guest',
+      bookerName: r.booker_name,
+      activity: toActivity(r),
+    }));
   }
 
   @Post()

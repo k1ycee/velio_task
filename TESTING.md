@@ -109,6 +109,8 @@ flutter run -d "iPhone 17 Pro"            # first build takes a few minutes (pod
    **Talking point:** the activity's open spots are gone, but Ada's spot was held for her at booking time, so she can still claim it.
 3. Fill name `Ada`, a phone, an email → **Claim my spot**.
    ✅ "**You're in! See you there.**" (She took the spot held for her, so the count doesn't change.)
+   Tap **back**, then the **My activities** tab at the bottom.
+   ✅ Under **Upcoming**: "Sunset Kayaking", tomorrow's date and 6:00 PM, "With Bo". (Pull down to refresh.)
 4. Window A: within ~5 s Bo's plan shows **Ada · VOUCH** under "Who's going", the vouch row says **claimed**, and "1 held spot to fill".
 5. Open the **same vouch link** again in the simulator.
    ✅ You stay on the **Got an invite?** page and a red flashbar drops in from the top for 2 seconds saying "This vouch link has already been used. Ask your friend for a new one.", then slides back up by itself. The claim page never opens: vouch links are single-use.
@@ -168,9 +170,9 @@ psql "UPDATE plans SET hold_expires_at = now() WHERE id = <id>;"   # expire it
 ## 10. Automated tests (show they're green)
 
 ```bash
-cd velio_server && npm test && npm run test:e2e      # 10 unit + 60 database tests (recreates a velio_test DB)
+cd velio_server && npm test && npm run test:e2e      # 10 unit + 62 database tests (recreates a velio_test DB)
 cd velio_web && npm test                             # 13
-cd velio_flutter && flutter test                     # 24 (one runs against the live API, skips if it's down)
+cd velio_flutter && flutter test                     # 28 (one runs against the live API, skips if it's down)
 ```
 
 ---

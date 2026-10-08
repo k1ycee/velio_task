@@ -16,7 +16,7 @@ docker compose down -v && docker compose up -d --build
 docker compose ps                         # all four services "running"
 
 open -a Simulator                         # boot an iPhone simulator
-cd velio_flutter && flutter run           # guest app
+cd velio_flutter && flutter run           # guest app (details: "Run the guest app on iOS" below)
 ```
 
 **Windows to arrange on screen:**
@@ -29,6 +29,33 @@ cd velio_flutter && flutter run           # guest app
 | D — browser tab | http://localhost:3000/dashboard | metrics |
 
 > Windows A and B **must** be different browser profiles (normal + private). Tabs in the same profile share the logged-in user.
+
+### Run the guest app on iOS
+
+**Simulator (what the demo uses):**
+
+```bash
+xcode-select -p                           # must point at Xcode.app, not CommandLineTools
+                                          #   fix: sudo xcode-select -s /Applications/Xcode.app
+open -a Simulator                         # boots the default iPhone
+cd velio_flutter
+flutter pub get
+flutter devices                           # the booted iPhone appears, e.g. "iPhone 17 Pro (simulator)"
+flutter run -d "iPhone 17 Pro"            # first build takes a few minutes (pod install + Xcode build)
+```
+
+- The simulator shares your Mac's network, so the default `http://localhost:3000` reaches the Docker API with no flags.
+- To open an invite on launch, skip pasting: `flutter run -d "iPhone 17 Pro" --dart-define=INVITE=<link or token>`.
+- Keep `flutter run` open: `r` hot-reloads, `R` restarts, `q` quits.
+- A different iPhone: `xcrun simctl list devices available`, then `open -a Simulator --args -CurrentDeviceUDID <udid>`.
+
+**Physical iPhone (not verified for this build):**
+
+1. Plug in the phone and trust the Mac. On the phone, turn on Settings → Privacy & Security → **Developer Mode**.
+2. `open velio_flutter/ios/Runner.xcworkspace` → Runner target → **Signing & Capabilities** → choose your Team. If Xcode complains, change the bundle identifier to something unique.
+3. Get the Mac's LAN IP (`ipconfig getifaddr en0`). The phone must be on the same Wi-Fi.
+4. Run `flutter run -d <your iPhone> --dart-define=API_URL=http://<lan-ip>:3000`.
+5. On first launch, trust the developer under Settings → General → VPN & Device Management, and tap **Allow** on the local-network prompt.
 
 ---
 

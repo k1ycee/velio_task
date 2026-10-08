@@ -111,7 +111,7 @@ flutter run -d "iPhone 17 Pro"            # first build takes a few minutes (pod
    ✅ "**You're in! See you there.**" (She took the spot held for her, so the count doesn't change.)
 4. Window A: within ~5 s Bo's plan shows **Ada · VOUCH** under "Who's going", the vouch row says **claimed**, and "1 held spot to fill".
 5. Open the **same vouch link** again in the simulator.
-   ✅ You stay on the **Got an invite?** page and a red flashbar at the top says "This vouch link has already been used. Ask your friend for a new one." The claim page never opens: vouch links are single-use.
+   ✅ You stay on the **Got an invite?** page and a red flashbar drops in from the top for 2 seconds saying "This vouch link has already been used. Ask your friend for a new one.", then slides back up by itself. The claim page never opens: vouch links are single-use.
 6. Open Bo's **public link** in the simulator and claim.
    ✅ "You already have a spot for this activity." — the app remembers Ada, and one person can't hold two spots.
 

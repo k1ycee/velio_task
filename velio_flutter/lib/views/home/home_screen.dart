@@ -30,10 +30,9 @@ class HomeScreen extends HookConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Velio')),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            if (vm.flash != null) FlashBar(message: vm.flash!, onDismiss: vm.dismissFlash),
-            Expanded(
+            Positioned.fill(
               child: ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
@@ -59,6 +58,14 @@ class HomeScreen extends HookConsumerWidget {
                 ],
               ),
             ),
+            // The Stack clips, so the flashbar seems to drop from under the app bar.
+            if (vm.flash != null)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: FlashBar(message: vm.flash!, onDismiss: vm.dismissFlash),
+              ),
           ],
         ),
       ),

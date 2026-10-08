@@ -23,11 +23,23 @@ Future<void> pumpHome(WidgetTester tester, FakeRepo repo) async {
   ));
 }
 
+/// Pumps fixed steps instead of pumpAndSettle, which would run the flashbar's whole 2.5s animation.
+Future<void> pumpBriefly(WidgetTester tester) async {
+  for (var i = 0; i < 5; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
+
 Future<void> openInvite(WidgetTester tester, String code) async {
   await tester.enterText(find.byType(TextField), code);
   await tester.tap(find.text('Open invite'));
-  await tester.pumpAndSettle();
+  await pumpBriefly(tester);
 }
+
+/// The flashbar is fully on screen (its top edge at the top of the page body).
+bool flashBarShown(WidgetTester tester) =>
+    tester.getTopLeft(find.descendant(of: find.byType(FlashBar), matching: find.byType(Material))).dy ==
+    tester.getTopLeft(find.byType(Stack).first).dy;
 
 void main() {
   testWidgets('a used vouch link shows a flashbar on the invite page and does not open the claim page',
@@ -38,16 +50,19 @@ void main() {
     expect(find.byType(ClaimScreen), findsNothing);
     expect(find.text('Got an invite?'), findsOneWidget);
     expect(find.widgetWithText(FlashBar, usedVouchMessage), findsOneWidget);
+    expect(flashBarShown(tester), isTrue); // dropped in
 
-    await tester.tap(find.byTooltip('Dismiss'));
-    await tester.pump();
-    expect(find.byType(FlashBar), findsNothing);
+    await tester.pump(FlashBar.hold); // held for 2s, now sliding back up
+    expect(flashBarShown(tester), isFalse);
+    await tester.pumpAndSettle();
+    expect(find.byType(FlashBar), findsNothing); // gone by itself
   });
 
   testWidgets('a vouch used up while claiming returns to the invite page with the flashbar', (tester) async {
     final repo = FakeRepo();
     await pumpHome(tester, repo);
     await openInvite(tester, 'freshtoken1');
+    await tester.pumpAndSettle(); // finish the page transition
     expect(find.text('Booky vouched for you'), findsOneWidget);
 
     repo.claimResponse = left(const RequestFailure(message: 'x', statusCode: 409, reason: 'used'));
@@ -55,9 +70,11 @@ void main() {
     await tester.enterText(find.widgetWithText(TextFormField, 'Phone'), '+15551234');
     await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'g@x.com');
     await tester.tap(find.text('Claim my spot'));
-    await tester.pumpAndSettle();
+    await pumpBriefly(tester);
 
-    expect(find.byType(ClaimScreen), findsNothing);
     expect(find.widgetWithText(FlashBar, usedVouchMessage), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.byType(ClaimScreen), findsNothing);
+    expect(find.byType(FlashBar), findsNothing);
   });
 }

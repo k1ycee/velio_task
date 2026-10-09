@@ -13,7 +13,6 @@ A host creates an **Activity** with limited spots. A **booker** books their own 
 
 **More docs:**
 - [`PLANS.md`](PLANS.md): the plan and what was built.
-- [`TESTING.md`](TESTING.md): step-by-step demo script.
 - [`OWNERSHIP.md`](OWNERSHIP.md): diagnosing and improving the invite funnel.
 - `grill-me-sessions/velioapp.grill.md`: the product decisions behind it.
 
@@ -60,7 +59,7 @@ cd velio_web && npm install && npm run dev                               # :5173
 | Physical phone | `flutter run --dart-define=API_URL=http://<your-mac-lan-ip>:3000` |
 | Open an invite on launch (demo) | `flutter run --dart-define=INVITE=<velio://invite/… or token>` |
 
-**Try it:** in the web app create a user, then switch to **Host** and create an activity. Switch to **Booker** (use a private window for a second user), book with **+2 friends**, then create a vouch link and copy it. Paste the link into the phone app's home screen and claim. Watch the counts change in every window. [`TESTING.md`](TESTING.md) has the full 25-minute script.
+**Try it:** in the web app create a user, then switch to **Host** and create an activity. Switch to **Booker** (use a private window for a second user), book with **+2 friends**, then create a vouch link and copy it. Paste the link into the phone app's home screen and claim. Watch the counts change in every window.
 
 **Tests:**
 

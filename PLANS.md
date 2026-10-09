@@ -14,7 +14,7 @@
 
 **Spec:** `grill-me-sessions/velioapp.grill.md` (decisions and risks) · `Questions.MD` (27-question Q&A log, kept locally and excluded from git).
 
-**Companion docs:** [`README.md`](README.md) (run it, architecture, trade-offs, tracking) · [`TESTING.md`](TESTING.md) (demo script) · [`OWNERSHIP.md`](OWNERSHIP.md) (invite-funnel diagnosis and improvements).
+**Companion docs:** [`README.md`](README.md) (run it, architecture, trade-offs, tracking) · [`OWNERSHIP.md`](OWNERSHIP.md) (invite-funnel diagnosis and improvements).
 
 **Status (2026-10-08): all 14 tasks done**, plus post-build changes (vouch-link explanation on the web, used-vouch flashbar and a "My activities" tab on mobile, loading states on both, one design language). Every suite is green:
 - server: 9 unit tests + 69 database (e2e) tests

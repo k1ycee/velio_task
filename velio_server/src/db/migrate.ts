@@ -1,14 +1,13 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-
-export const DEFAULT_DATABASE_URL = 'postgres://velio:velio@localhost:5432/velio';
+import { databaseUrl } from '../env.js';
 
 const MIGRATIONS_DIR = fileURLToPath(new URL('../../migrations/', import.meta.url));
 
 // ponytail: plain numbered .sql files, each applied once in its own transaction.
 // Swap for a migration library if we ever need down-migrations.
-export async function migrate(url = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL) {
+export async function migrate(url = databaseUrl()) {
   const client = new pg.Client({ connectionString: url });
   await client.connect();
   try {

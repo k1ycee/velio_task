@@ -23,9 +23,12 @@ A host creates an **Activity** with limited spots. A **booker** books their own 
 **Prerequisites:** Docker Desktop · Flutter 3.44 with Xcode (iOS simulator) or Android Studio · `jq` (only for the demo scripts). Node 24 is only needed to run the tests or the hot-reload dev setup.
 
 ```bash
+# 0. Secrets: copy the template and set a password (.env is git-ignored)
+cp .env.example .env        # then replace both "change-me" values with the same password
+
 # 1–3. Database, cache, backend and web — one command
 docker compose up -d --build
-#   postgres :5432 (velio/velio) · redis :6379
+#   postgres :5432 (user/password from .env) · redis :6379
 #   server   http://localhost:3000   (runs pending migrations on start; / redirects to the dashboard)
 #   web      http://localhost:5173   (host + booker app)
 
@@ -71,11 +74,12 @@ cd velio_server && ./scripts/race-demo.sh         # live oversell race: 20 guest
 cd velio_server && node scripts/load-test.mjs     # 100 hosts, 200 bookers, 700 guests through the API; real data stays in the DB
 ```
 
-Defaults suit the npm dev setup; `docker-compose.yml` sets the container values (e.g. `DATABASE_URL` points at the `postgres` service).
+Credentials live only in `.env` at the repo root (git-ignored; template in `.env.example`). Docker Compose reads it automatically, and the server's npm scripts load it too. Compose refuses to start without `POSTGRES_PASSWORD`, and the server refuses to start without `DATABASE_URL`: there is no password in the code.
 
 | Env var | Default | Used by |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgres://velio:velio@localhost:5432/velio` | server |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `velio` / **required** / `velio` | Postgres container, and the server's URL inside Docker |
+| `DATABASE_URL` | **required** outside Docker (`postgres://<user>:<password>@localhost:5432/velio`) | server, migrations, e2e tests (which use the same server with a `velio_test` database) |
 | `REDIS_URL` | `redis://localhost:6379` | server |
 | `PORT` | `3000` | server |
 | `VITE_API_URL` | `http://localhost:3000` | web (baked in at build time; in Docker it's the `web` build arg in `docker-compose.yml`) |
@@ -207,7 +211,7 @@ Nothing in the cut was dropped. All 14 planned tasks shipped.
 | Cancellations / capacity edits not built | Rules decided, not implemented | ~6h, rules in the session file |
 | Hand-written SQL migrations, no ORM | No rollbacks | A migration tool |
 | Web API URL baked in at image build time | Pointing the web app at another API means rebuilding | Serve a runtime `config.js`, or put the API behind the same origin |
-| Credentials in `docker-compose.yml`, no TLS | Fine locally, not elsewhere | Secrets manager; TLS at the load balancer |
+| Credentials in a local `.env` file, no TLS | Fine locally, not elsewhere | Secrets manager; TLS at the load balancer |
 | Publish-after-commit isn't guaranteed | If the process dies between commit and publish, live clients miss one update until they resync | Transactional outbox or `LISTEN/NOTIFY` |
 
 ### Taking it to production

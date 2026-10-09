@@ -1,19 +1,20 @@
 # `docker compose up -d --build` runs everything: Postgres, Redis, the API (:3000) and the web app (:5173).
 # For hot-reload development, start only the data stores: `docker compose up -d postgres redis`,
 # then `npm run start:dev` / `npm run dev` (see README).
+# Credentials come from .env at the repo root (git-ignored); copy .env.example to start.
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: velio
-      POSTGRES_PASSWORD: velio
-      POSTGRES_DB: velio
+      POSTGRES_USER: ${POSTGRES_USER:-velio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-velio}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U velio -d velio"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -31,7 +32,7 @@ services:
   server:
     build: ./velio_server
     environment:
-      DATABASE_URL: postgres://velio:velio@postgres:5432/velio
+      DATABASE_URL: postgres://${POSTGRES_USER:-velio}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}@postgres:5432/${POSTGRES_DB:-velio}
       REDIS_URL: redis://redis:6379
       PORT: "3000"
     ports:

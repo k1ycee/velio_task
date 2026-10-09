@@ -12,7 +12,7 @@
 - **Web:** React 19 + Vite 8, Vitest.
 - **Mobile:** Flutter 3.44 with `hooks_riverpod`, `flutter_hooks`, `dio`, `fpdart`, `app_links`, `shared_preferences`.
 
-**Spec:** `grill-me-sessions/velioapp.grill.md` (decisions and risks) · `Questions.MD` (27-question Q&A log, kept locally and excluded from git).
+**Spec:** the product grill session (decisions and risks; kept locally and excluded from git) · `Questions.MD` (27-question Q&A log, kept locally and excluded from git).
 
 **Companion docs:** [`README.md`](README.md) (run it, architecture, trade-offs, tracking) · [`OWNERSHIP.md`](OWNERSHIP.md) (invite-funnel diagnosis and improvements).
 

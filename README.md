@@ -14,7 +14,6 @@ A host creates an **Activity** with limited spots. A **booker** books their own 
 **More docs:**
 - [`PLANS.md`](PLANS.md): the plan and what was built.
 - [`OWNERSHIP.md`](OWNERSHIP.md): diagnosing and improving the invite funnel.
-- `grill-me-sessions/velioapp.grill.md`: the product decisions behind it.
 
 ---
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { applyUpdate } from './live';
 import { formatCountdown, holdProgress } from './time';
 import { vouchBlockedReason } from './invites';
+import { bookLabel, filterActivities, friendsLabel, weekendRange } from './discover';
+import type { Activity } from './api';
 
 describe('applyUpdate', () => {
   const start = { '1': { spotsLeft: 5, version: 2 } };
@@ -65,5 +67,50 @@ describe('vouchBlockedReason', () => {
 
   it('explains when every held spot already has a vouch link', () => {
     expect(vouchBlockedReason(plan(2, 2), now)).toMatch(/already has a vouch link/i);
+  });
+});
+
+describe('filterActivities', () => {
+  const now = new Date(2026, 9, 8, 12, 0); // Thursday 8 Oct 2026, local time
+  const at = (d: number, h = 18) => new Date(2026, 9, d, h).toISOString();
+  const act = (id: string, title: string, startsAt: string, spotsLeft = 3): Activity => ({
+    id, hostId: '1', title, startsAt, capacity: 10, spotsLeft, version: 1,
+  });
+  const list = [
+    act('1', 'Sunset Kayak', at(9)), // Friday
+    act('2', 'Board games', at(10)), // Saturday
+    act('3', 'Kayak lessons', at(20), 0), // in 12 days, sold out
+  ];
+  const ids = (q: string, tab: Parameters<typeof filterActivities>[2], counts = {}) =>
+    filterActivities(list, q, tab, counts, now).map((a) => a.id);
+
+  it('matches the title case-insensitively and ignores surrounding spaces', () => {
+    expect(ids('  KAYAK ', 'all')).toEqual(['1', '3']);
+    expect(ids('', 'all')).toEqual(['1', '2', '3']);
+  });
+
+  it('filters by this week, this weekend and has spots', () => {
+    expect(ids('', 'week')).toEqual(['1', '2']);
+    expect(ids('', 'weekend')).toEqual(['2']);
+    expect(ids('', 'spots')).toEqual(['1', '2']);
+  });
+
+  it('uses the live count for "has spots" when it is newer', () => {
+    expect(ids('', 'spots', { '2': { spotsLeft: 0, version: 2 } })).toEqual(['1']);
+  });
+
+  it('treats Sunday as part of the current weekend', () => {
+    const [start, end] = weekendRange(new Date(2026, 9, 11, 9)); // Sunday
+    expect(start).toEqual(new Date(2026, 9, 10));
+    expect(end).toEqual(new Date(2026, 9, 12));
+  });
+});
+
+describe('booking labels', () => {
+  it('says who the booking covers instead of a bare count', () => {
+    expect(bookLabel(0)).toBe('Book just me');
+    expect(bookLabel(1)).toBe('Book you + 1 friend');
+    expect(bookLabel(3)).toBe('Book you + 3 friends');
+    expect(friendsLabel(2)).toBe('You + 2 friends');
   });
 });

@@ -4,6 +4,7 @@ import { useIdentity } from './useIdentity';
 import { HostPage } from './HostPage';
 import { BookerPage } from './BookerPage';
 import { PlanPage } from './PlanPage';
+import { ThemeToggle } from './ThemeToggle';
 
 // ponytail: hash routing — three routes don't need a router library.
 function useHash() {
@@ -37,7 +38,23 @@ export default function App() {
           </a>
         </nav>
         <IdentityBar identity={identity} />
+        <ThemeToggle />
       </header>
+
+      {/* Users have no fixed role: the switch only changes what you're doing right now. */}
+      <p className="mode-hint" aria-live="polite">
+        {role === 'host' && !planId ? (
+          <>
+            <strong>Host mode</strong> · Create activities and watch spots fill live. Switch to Booker to book one
+            yourself.
+          </>
+        ) : (
+          <>
+            <strong>Booker mode</strong> · Book a spot for you and your friends, then invite them. Switch to Host to
+            create an activity.
+          </>
+        )}
+      </p>
 
       <main>
         {!identity.user ? (

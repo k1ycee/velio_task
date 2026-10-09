@@ -1,23 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:velio_flutter/core/api/models/invite_models.dart';
+import 'package:velio_flutter/core/constants/velio_theme.dart';
 import 'package:velio_flutter/core/providers.dart';
 import 'package:velio_flutter/core/repositories/request_failure.dart';
 import 'package:velio_flutter/views/claim/claim_screen.dart';
 
 import 'fakes.dart';
 
-Future<FakeRepo> pumpClaim(WidgetTester tester, {FakeRepo? repo}) async {
+Future<FakeRepo> pumpClaim(WidgetTester tester, {FakeRepo? repo, ThemeData? theme}) async {
   final fake = repo ?? FakeRepo();
   usePhoneScreen(tester);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [inviteRepo.overrideWithValue(fake), storageService.overrideWithValue(FakeStorage())],
       child: MaterialApp(
+        theme: theme,
         home: ClaimScreen(token: 'tok', invite: fake.details),
       ),
     ),
@@ -56,6 +59,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Required'), findsNWidgets(3));
     expect(repo.claimedWithUser, isNull);
+  });
+
+  testWidgets('field labels turn red on a validation error, focused or not', (tester) async {
+    await pumpClaim(tester, theme: velioTheme(Brightness.light));
+    Color? labelColor(String label) => tester.renderObject<RenderParagraph>(find.text(label)).text.style?.color;
+    const t = VelioTokens.light;
+
+    await tester.tap(find.widgetWithText(TextFormField, 'Phone'));
+    await tester.pumpAndSettle();
+    expect(labelColor('Phone'), t.link, reason: 'focused without an error');
+
+    await tester.tap(find.text('Claim my spot'));
+    await tester.pumpAndSettle();
+    expect(labelColor('Your name'), t.danger, reason: 'error, not focused');
+    await tester.tap(find.widgetWithText(TextFormField, 'Email'));
+    await tester.pumpAndSettle();
+    expect(labelColor('Email'), t.danger, reason: 'error while focused');
+  });
+
+  testWidgets('buttons use the app font, not the platform default', (tester) async {
+    await pumpClaim(tester, theme: velioTheme(Brightness.light));
+    final style = tester.renderObject<RenderParagraph>(find.text('Claim my spot')).text.style;
+    expect(style?.fontFamily, velioFontFamily);
   });
 
   testWidgets('shows sold out when the race is lost', (tester) async {

@@ -6,6 +6,7 @@ import '../../core/constants/velio_theme.dart';
 import '../../core/providers.dart';
 import '../../core/view_models/my_activities_vm.dart';
 import '../../utils/format_when.dart';
+import '../../widgets/activity_cover.dart';
 import '../../widgets/skeleton.dart';
 import '../../widgets/surfaces.dart';
 
@@ -68,7 +69,7 @@ class MyActivitiesScreen extends ConsumerWidget {
   }
 }
 
-/// Web `.list > li.row`: surface, 1px border, 10px radius; bold title over a muted date.
+/// Web `.event` card: gradient cover with the title, then the date, who you're going with, and a badge.
 class _ActivityRow extends StatelessWidget {
   const _ActivityRow({required this.item, this.past = false});
 
@@ -82,64 +83,79 @@ class _ActivityRow extends StatelessWidget {
     final when = formatWhen(l10n, item.activity.startsAt);
 
     return Card(
-      margin: const EdgeInsets.only(top: 8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.activity.title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(color: past ? t.muted : null),
+      margin: const EdgeInsets.only(top: 12),
+      clipBehavior: Clip.antiAlias, // the cover runs flush to the card's top corners
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ActivityCover(
+            activityId: item.activity.id,
+            title: item.activity.title,
+            dimmed: past,
+            borderRadius: BorderRadius.zero,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        when,
+                        style: TextStyle(color: past ? t.muted : t.text, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.isBooker ? 'You booked this' : 'With ${item.bookerName}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(when, style: TextStyle(color: t.muted)),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.isBooker ? 'You booked this' : 'With ${item.bookerName}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
+                ),
+                if (item.isBooker) const VelioBadge('booker') else const VelioBadge('guest'),
+              ],
             ),
-            if (item.isBooker) const VelioBadge('booker') else const VelioBadge('guest'),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Same shape as [_ActivityRow]: title, date line, "with" line, badge.
+/// Same shape as [_ActivityRow]: cover, date line, "with" line, badge.
 class _SkeletonRow extends StatelessWidget {
   const _SkeletonRow();
 
   @override
   Widget build(BuildContext context) {
     return const Card(
-      margin: EdgeInsets.only(top: 8),
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SkeletonBox(width: 160, height: 16),
-                  SizedBox(height: 8),
-                  SkeletonBox(width: 220, height: 12),
-                  SizedBox(height: 6),
-                  SkeletonBox(width: 90, height: 12),
-                ],
-              ),
+      margin: EdgeInsets.only(top: 12),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkeletonBox(width: double.infinity, height: 120, radius: 0),
+          Padding(
+            padding: EdgeInsets.fromLTRB(14, 14, 14, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SkeletonBox(width: 160, height: 14),
+                      SizedBox(height: 8),
+                      SkeletonBox(width: 90, height: 12),
+                    ],
+                  ),
+                ),
+                SkeletonBox(width: 52, height: 18, radius: 999),
+              ],
             ),
-            SkeletonBox(width: 52, height: 18, radius: 999),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

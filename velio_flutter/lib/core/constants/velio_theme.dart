@@ -17,40 +17,52 @@ class VelioTokens extends ThemeExtension<VelioTokens> {
     required this.dangerBg,
     required this.vouch,
     required this.vouchBg,
+    required this.subtle,
+    required this.link,
+    required this.warnLine,
   });
 
   final Color bg, surface, text, muted, border, accent, accentText, warn, warnBg, danger, dangerBg, vouch, vouchBg;
 
+  /// Section bands and search fields; links, tabs and focus; the yellow outline on urgency badges.
+  final Color subtle, link, warnLine;
+
   static const light = VelioTokens(
-    bg: Color(0xFFF6F5F2),
+    bg: Color(0xFFFFFFFF),
     surface: Color(0xFFFFFFFF),
-    text: Color(0xFF1C1B19),
-    muted: Color(0xFF6B6860),
-    border: Color(0xFFE3E0D9),
-    accent: Color(0xFF1F6F5C),
+    text: Color(0xFF1F1535),
+    muted: Color(0xFF6C6880),
+    border: Color(0xFFE3E1EA),
+    accent: Color(0xFF212121),
     accentText: Color(0xFFFFFFFF),
-    warn: Color(0xFF9A6200),
-    warnBg: Color(0xFFFFF4DC),
-    danger: Color(0xFFB3261E),
-    dangerBg: Color(0xFFFDE8E6),
-    vouch: Color(0xFF5B3FA8),
-    vouchBg: Color(0xFFEFE9FB),
+    warn: Color(0xFF212121),
+    warnBg: Color(0xFFFFF8DB),
+    danger: Color(0xFFC4162B),
+    dangerBg: Color(0xFFFDECEE),
+    vouch: Color(0xFF6A3FD6),
+    vouchBg: Color(0xFFF1EBFF),
+    subtle: Color(0xFFF7F6FA),
+    link: Color(0xFF3657F5),
+    warnLine: Color(0xFFF2C230),
   );
 
   static const dark = VelioTokens(
-    bg: Color(0xFF151513),
-    surface: Color(0xFF1E1E1B),
-    text: Color(0xFFEDEBE6),
-    muted: Color(0xFFA19D94),
-    border: Color(0xFF34332F),
-    accent: Color(0xFF4FB89C),
-    accentText: Color(0xFF0F1F1A),
-    warn: Color(0xFFF0B84D),
-    warnBg: Color(0xFF3A2C10),
-    danger: Color(0xFFF2948C),
-    dangerBg: Color(0xFF3D1B18),
-    vouch: Color(0xFFB9A2F2),
-    vouchBg: Color(0xFF2C2440),
+    bg: Color(0xFF120C1F),
+    surface: Color(0xFF1C1530),
+    text: Color(0xFFF1EEF7),
+    muted: Color(0xFFA8A3B8),
+    border: Color(0xFF342B47),
+    accent: Color(0xFFF2F2F2),
+    accentText: Color(0xFF212121),
+    warn: Color(0xFFF5CF55),
+    warnBg: Color(0xFF3A3010),
+    danger: Color(0xFFFF8A93),
+    dangerBg: Color(0xFF3F1620),
+    vouch: Color(0xFFB89CFF),
+    vouchBg: Color(0xFF2B2147),
+    subtle: Color(0xFF17112A),
+    link: Color(0xFF8DA2FF),
+    warnLine: Color(0xFFF5CF55),
   );
 
   /// Falls back to the matching token set when the theme wasn't built by [velioTheme] (e.g. in tests).
@@ -66,8 +78,11 @@ class VelioTokens extends ThemeExtension<VelioTokens> {
   VelioTokens lerp(VelioTokens? other, double t) => t < 0.5 || other == null ? this : other;
 }
 
+/// Bundled in assets/fonts (see pubspec.yaml).
+const velioFontFamily = 'PlusJakartaSans';
+
 /// Material theme built from [VelioTokens], matching the web: flat bordered surfaces, 12px cards,
-/// 8px controls, semibold buttons, outlined inputs.
+/// 6px controls, semibold buttons, outlined inputs, Plus Jakarta Sans.
 ThemeData velioTheme(Brightness brightness) {
   final t = brightness == Brightness.light ? VelioTokens.light : VelioTokens.dark;
   final scheme = ColorScheme(
@@ -87,23 +102,25 @@ ThemeData velioTheme(Brightness brightness) {
     outline: t.border,
     outlineVariant: t.border,
   );
-  final controlShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
-  const buttonText = TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
+  final controlShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(6));
+  // Button styles replace the inherited text style, so they must name the family themselves.
+  const buttonText = TextStyle(fontFamily: velioFontFamily, fontSize: 16, fontWeight: FontWeight.w600);
   OutlineInputBorder inputBorder(Color c, [double w = 1]) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: BorderRadius.circular(6),
     borderSide: BorderSide(color: c, width: w),
   );
 
   return ThemeData(
     useMaterial3: true,
+    fontFamily: velioFontFamily,
     brightness: brightness,
     colorScheme: scheme,
     extensions: [t],
     scaffoldBackgroundColor: t.bg,
     splashFactory: NoSplash.splashFactory,
     textTheme: TextTheme(
-      headlineSmall: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, height: 1.2, color: t.text), // web h1
-      titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, height: 1.2, color: t.text), // web h2
+      headlineSmall: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.2, height: 1.2, color: t.text), // web h1
+      titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, height: 1.2, color: t.text), // web h2
       titleSmall: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: t.text), // web <strong>
       bodyLarge: TextStyle(fontSize: 16, height: 1.45, color: t.text),
       bodyMedium: TextStyle(fontSize: 15, height: 1.45, color: t.text),
@@ -122,24 +139,33 @@ ThemeData velioTheme(Brightness brightness) {
       style: OutlinedButton.styleFrom(
         shape: controlShape,
         textStyle: buttonText,
-        foregroundColor: t.accent,
-        side: BorderSide(color: t.accent),
+        foregroundColor: t.text, // secondary actions are neutral; the accent is for booking only
+        side: BorderSide(color: t.border),
         minimumSize: const Size(0, 48),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(shape: controlShape, textStyle: buttonText, foregroundColor: t.accent),
+      style: TextButton.styleFrom(shape: controlShape, textStyle: buttonText, foregroundColor: t.link),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: t.surface,
-      labelStyle: TextStyle(color: t.muted),
-      floatingLabelStyle: TextStyle(color: t.accent),
+      // A fixed colour here would override Material's error red, so resolve per state: error wins.
+      labelStyle: WidgetStateTextStyle.resolveWith(
+        (s) => TextStyle(color: s.contains(WidgetState.error) ? t.danger : t.muted),
+      ),
+      floatingLabelStyle: WidgetStateTextStyle.resolveWith(
+        (s) => TextStyle(
+          color: s.contains(WidgetState.error)
+              ? t.danger
+              : (s.contains(WidgetState.focused) ? t.link : t.muted),
+        ),
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       border: inputBorder(t.border),
       enabledBorder: inputBorder(t.border),
       disabledBorder: inputBorder(t.border),
-      focusedBorder: inputBorder(t.accent, 2), // web :focus-visible outline
+      focusedBorder: inputBorder(t.link, 2), // web :focus-visible outline
       errorBorder: inputBorder(t.danger),
       focusedErrorBorder: inputBorder(t.danger, 2),
       errorStyle: TextStyle(color: t.danger),
@@ -149,7 +175,7 @@ ThemeData velioTheme(Brightness brightness) {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: t.border),
       ),
     ),

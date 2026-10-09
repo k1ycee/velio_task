@@ -8,6 +8,7 @@ import 'package:velio_flutter/core/providers.dart';
 import 'package:velio_flutter/core/repositories/request_failure.dart';
 import 'package:velio_flutter/core/view_models/invite_entry_vm.dart';
 import 'package:velio_flutter/core/view_models/my_activities_vm.dart';
+import 'package:velio_flutter/widgets/activity_cover.dart';
 import 'package:velio_flutter/utils/format_when.dart';
 import 'package:velio_flutter/views/controller/controller_screen.dart';
 import 'package:velio_flutter/widgets/skeleton.dart';
@@ -92,6 +93,7 @@ void main() {
     expect(find.text(formatWhen(l10n, soon)), findsOneWidget); // same short form as the web
     expect(find.textContaining('With Bo'), findsOneWidget);
     expect(find.textContaining('You booked this'), findsOneWidget);
+    expect(find.byType(ActivityCover), findsNWidgets(2)); // a gradient cover per card, like the web
 
     // A used invite tapped while on this tab brings the guest back to the invite tab for the flashbar.
     container.read(inviteEntryVM).bounce(usedVouchMessage);

@@ -16,10 +16,7 @@
 
 **Companion docs:** [`README.md`](README.md) (run it, architecture, trade-offs, tracking) · [`OWNERSHIP.md`](OWNERSHIP.md) (invite-funnel diagnosis and improvements).
 
-**Status (2026-10-08): all 14 tasks done**, plus post-build changes (vouch-link explanation on the web, used-vouch flashbar and a "My activities" tab on mobile, loading states on both, one design language). Every suite is green:
-- server: 9 unit tests + 69 database (e2e) tests
-- web: 13 tests
-- Flutter: 31 tests
+
 
 Builds and linters are clean. See [Verification](#9-verification) for what has and hasn't been checked by eye.
 
@@ -329,7 +326,7 @@ The fallback cut order (dashboard settings form → plan-page polish → Flutter
 | --- | --- |
 | `velio_server`: `npm test` · `npm run test:e2e` | 10 · 62 passing (repeated runs, no flakes); build and lint clean |
 | `velio_web`: `npm test` · `npm run build` · `npm run lint` | 9 passing; clean |
-| `velio_flutter`: `flutter analyze` · `flutter test` | No issues; 31 passing, including the real-server test (which also checks that reopening a used vouch link is stopped on the invite page and that the claim shows in "My activities") |
+| `velio_flutter`: `flutter analyze` · `flutter test` | No issues; 34 passing, including the real-server test (which also checks that reopening a used vouch link is stopped on the invite page and that the claim shows in "My activities") |
 | Platform builds | `flutter build macos --debug` ✅ · `flutter build ios --debug --no-codesign` ✅ |
 | Docker stack | `docker compose up -d --build`: all four services healthy; a fresh database is migrated on start; the race demo and the headless-Chrome flow pass against the containers |
 | Real server smoke test | `curl -N` stream showed the snapshot and then the post-commit update |

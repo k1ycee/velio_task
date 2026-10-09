@@ -7,6 +7,7 @@ import '../../core/constants/velio_theme.dart';
 import '../../core/providers.dart';
 import '../../core/view_models/claim_vm.dart';
 import '../../utils/format_when.dart';
+import '../../widgets/activity_cover.dart';
 import '../../widgets/surfaces.dart';
 import 'widget/claim_form.dart';
 import 'widget/spots_left.dart';
@@ -59,6 +60,8 @@ class _Invite extends StatelessWidget {
       children: [
         PageHeader(title: 'Your invite', onBack: () => Navigator.of(context).maybePop()),
         Panel(
+          // A slim band, not a full cover: the claim button must stay above the fold on a 390×844 phone.
+          cover: ActivityCover(activityId: invite.activity.id, height: 52, borderRadius: BorderRadius.zero),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

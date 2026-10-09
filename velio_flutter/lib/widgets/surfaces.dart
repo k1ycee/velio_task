@@ -32,7 +32,7 @@ class PageHeader extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Text(
                     '← Back',
-                    style: TextStyle(color: t.muted, decoration: TextDecoration.underline, decorationColor: t.muted),
+                    style: TextStyle(color: t.link, decoration: TextDecoration.underline, decorationColor: t.link),
                   ),
                 ),
               ),
@@ -45,25 +45,36 @@ class PageHeader extends StatelessWidget {
   }
 }
 
-/// Web `.card`: white surface, 1px border, 12px radius, 20px padding.
+/// Web `.card`: white surface, 1px border, 12px radius, 20px padding. An optional [cover] runs flush
+/// across the top, edge to edge, clipped to the card's corners.
 class Panel extends StatelessWidget {
-  const Panel({super.key, required this.child, this.padding = const EdgeInsets.all(20)});
+  const Panel({super.key, required this.child, this.padding = const EdgeInsets.all(20), this.cover});
 
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final Widget? cover;
 
   @override
   Widget build(BuildContext context) {
     final t = VelioTokens.of(context);
     return Container(
       width: double.infinity,
-      padding: padding,
+      padding: cover == null ? padding : EdgeInsets.zero,
+      clipBehavior: cover == null ? Clip.none : Clip.antiAlias,
       decoration: BoxDecoration(
         color: t.surface,
         border: Border.all(color: t.border),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: child,
+      child: cover == null
+          ? child
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                cover!,
+                Padding(padding: padding, child: child),
+              ],
+            ),
     );
   }
 }
@@ -91,7 +102,7 @@ class VelioBadge extends StatelessWidget {
 
 enum NoticeTone { info, warn, error }
 
-/// Web `.notice` (warm) and error boxes: tinted, 8px radius, body text.
+/// Web `.notice` (warm) and error boxes: tinted, 6px radius, body text.
 class Notice extends StatelessWidget {
   const Notice(this.text, {super.key, this.tone = NoticeTone.warn, this.action});
 
@@ -112,7 +123,7 @@ class Notice extends StatelessWidget {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
         child: Row(
           children: [
             Expanded(

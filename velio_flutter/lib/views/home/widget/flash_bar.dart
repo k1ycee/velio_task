@@ -43,11 +43,11 @@ class FlashBar extends HookWidget {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
         child: Semantics(
           liveRegion: true,
-          // Inset with the web notice's 8px radius, so it reads as the same component dropping in.
+          // Inset with the web notice's 6px radius, so it reads as the same component dropping in.
           child: Material(
             color: scheme.errorContainer,
             elevation: 2,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(

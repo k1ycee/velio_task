@@ -42,12 +42,13 @@ export function PlanPage({ userId, planId }: { userId: string; planId: string })
 
   return (
     <div className="stack">
-      <a href="#/book" className="muted">
+      <a href="#/book">
         ← All activities
       </a>
       <section className="card">
         <div className="row">
           <div>
+            {holding && progress >= 0.5 && <span className="urgency">Holds end soon</span>}
             <h1>{plan.activity.title}</h1>
             <span className="muted">{formatWhen(plan.activity.startsAt)}</span>
           </div>

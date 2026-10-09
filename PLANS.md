@@ -85,7 +85,6 @@ All of these are on `GET /dashboard` (HTML) and `GET /dashboard/metrics` (JSON).
 
 | Area | Originally planned | As built | Why |
 | --- | --- | --- | --- |
-| Server framework | Fastify | **NestJS 12, ESM** (imports use `.js` suffixes) | My choice when the build started |
 | Tracking helper | `track/track.service.ts` | Plain `track(client, name, ids, props)` in `track/track.ts` | A function is enough; taking the transaction client keeps events atomic with the change they record |
 | Users / activities | Controller + service each | Controllers only | Thin CRUD; no logic for a service layer to hold |
 | `POST /users` body | `{phone, email}` | `{name, phone, email}` | The guest form and plan member list need a name |
